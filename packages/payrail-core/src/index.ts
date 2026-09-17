@@ -16,14 +16,15 @@ export type TaskId = string & { readonly __brand: "TaskId" };
 export type ReceiptId = string & { readonly __brand: "ReceiptId" };
 export type PolicyId = string & { readonly __brand: "PolicyId" };
 
-/** USDC amount represented as a decimal number (e.g. 0.05 = $0.05) */
+/** USDC settlement amount represented with the token's 6-decimal interface. */
 export type UsdcAmount = number;
 
 // ---------------------------------------------------------------------------
-// Base-first EVM architecture
+// Chain-agnostic EVM settlement architecture
 // ---------------------------------------------------------------------------
 
 export type EvmAddress = `0x${string}`;
+export type NativeGasToken = "ETH" | "USDC";
 
 export type WalletRole =
   | "human-owner"
@@ -36,19 +37,34 @@ export interface EvmChainConfig {
   chainId: number;
   name: string;
   slug: string;
-  nativeCurrency: "ETH";
+  nativeCurrency: NativeGasToken;
+  /** Native gas-unit decimals. Arc native USDC uses 18 decimals. */
+  nativeCurrencyDecimals?: number;
+  /** Minimum confirmations required by the PAYRAIL adapter. */
+  settlementConfirmations?: number;
+  /** Environment variable that supplies the RPC URL. Never commit RPC secrets. */
+  rpcEnvVar?: string;
+  explorerUrl?: string;
   dryRunByDefault: boolean;
   enabled: boolean;
 }
 
+/**
+ * Known EVM-compatible rails.
+ *
+ * Arc is intentionally additive. Base remains the architectural default and
+ * no chain gets authority to bypass wallet-guard, AEGIS, or execution policy.
+ * Mainnet-capable rails stay dry-run by default until an operator explicitly
+ * enables a signer and approval path.
+ */
 export const EVM_CHAINS = {
   BASE: {
     chainId: 8453,
     name: "Base",
     slug: "base",
     nativeCurrency: "ETH",
-    // Mainnet remains dry-run until approval, signer, allowance, and
-    // settlement gates are implemented and explicitly enabled.
+    nativeCurrencyDecimals: 18,
+    rpcEnvVar: "BASE_MAINNET_RPC_URL",
     dryRunByDefault: true,
     enabled: true,
   },
@@ -57,6 +73,31 @@ export const EVM_CHAINS = {
     name: "Base Sepolia",
     slug: "base-sepolia",
     nativeCurrency: "ETH",
+    nativeCurrencyDecimals: 18,
+    rpcEnvVar: "BASE_SEPOLIA_RPC_URL",
+    dryRunByDefault: true,
+    enabled: true,
+  },
+  ARC: {
+    chainId: 5042,
+    name: "Arc",
+    slug: "arc",
+    nativeCurrency: "USDC",
+    nativeCurrencyDecimals: 18,
+    settlementConfirmations: 1,
+    rpcEnvVar: "ARC_MAINNET_RPC_URL",
+    explorerUrl: "https://explorer.arc.io",
+    dryRunByDefault: true,
+    enabled: true,
+  },
+  ARC_TESTNET: {
+    chainId: 5042002,
+    name: "Arc Testnet",
+    slug: "arc-testnet",
+    nativeCurrency: "USDC",
+    nativeCurrencyDecimals: 18,
+    settlementConfirmations: 1,
+    rpcEnvVar: "ARC_TESTNET_RPC_URL",
     dryRunByDefault: true,
     enabled: true,
   },
@@ -65,6 +106,8 @@ export const EVM_CHAINS = {
     name: "Ethereum",
     slug: "ethereum",
     nativeCurrency: "ETH",
+    nativeCurrencyDecimals: 18,
+    rpcEnvVar: "ETHEREUM_RPC_URL",
     dryRunByDefault: true,
     enabled: false,
   },
@@ -73,19 +116,34 @@ export const EVM_CHAINS = {
     name: "Robinhood Chain",
     slug: "robinhood-chain",
     nativeCurrency: "ETH",
+    nativeCurrencyDecimals: 18,
+    rpcEnvVar: "ROBINHOOD_CHAIN_RPC_URL",
     dryRunByDefault: true,
     enabled: false,
   },
 } as const satisfies Record<string, EvmChainConfig>;
 
+export type EvmChain = (typeof EVM_CHAINS)[keyof typeof EVM_CHAINS];
+export type SettlementRailSlug = EvmChain["slug"];
+
 /**
- * Base is the architectural default, but it is intentionally non-settling
- * until the documented mainnet approval gates exist.
+ * Base remains the architectural default. Arc is a first-class optional rail,
+ * never a replacement for chain-agnostic routing.
  */
 export const DEFAULT_EVM_CHAIN = EVM_CHAINS.BASE;
 
+export function getEvmChainById(chainId: number): EvmChain | undefined {
+  return Object.values(EVM_CHAINS).find((chain) => chain.chainId === chainId);
+}
+
+export function getEvmChainBySlug(slug: string): EvmChain | undefined {
+  return Object.values(EVM_CHAINS).find((chain) => chain.slug === slug);
+}
+
 export interface WalletExecutionContext {
   chainId: number;
+  /** Optional human-readable route request; chainId remains authoritative. */
+  settlementRail?: SettlementRailSlug;
   walletRole: WalletRole;
   walletAddress?: EvmAddress;
   targetAddress?: EvmAddress;
@@ -169,7 +227,7 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Round USDC to 6 decimal places (USDC has 6 decimals on-chain) */
+/** Round settlement USDC to 6 token-interface decimals. */
 export function roundUsdc(amount: UsdcAmount): UsdcAmount {
   return Math.round(amount * 1_000_000) / 1_000_000;
 }
