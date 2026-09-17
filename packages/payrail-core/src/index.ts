@@ -9,14 +9,11 @@ export const PAYRAIL_VERSION = "0.2.0";
 // Core domain types
 // ---------------------------------------------------------------------------
 
-/** Unique identifier types — branded strings for type safety */
 export type AgentId = string & { readonly __brand: "AgentId" };
 export type DistrictId = string & { readonly __brand: "DistrictId" };
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ReceiptId = string & { readonly __brand: "ReceiptId" };
 export type PolicyId = string & { readonly __brand: "PolicyId" };
-
-/** USDC settlement amount represented with the token's 6-decimal interface. */
 export type UsdcAmount = number;
 
 // ---------------------------------------------------------------------------
@@ -38,11 +35,8 @@ export interface EvmChainConfig {
   name: string;
   slug: string;
   nativeCurrency: NativeGasToken;
-  /** Native gas-unit decimals. Arc native USDC uses 18 decimals. */
   nativeCurrencyDecimals?: number;
-  /** Minimum confirmations required by the PAYRAIL adapter. */
   settlementConfirmations?: number;
-  /** Environment variable that supplies the RPC URL. Never commit RPC secrets. */
   rpcEnvVar?: string;
   explorerUrl?: string;
   dryRunByDefault: boolean;
@@ -50,12 +44,11 @@ export interface EvmChainConfig {
 }
 
 /**
- * Known EVM-compatible rails.
+ * Known, verified EVM-compatible rails.
  *
- * Arc is intentionally additive. Base remains the architectural default and
- * no chain gets authority to bypass wallet-guard, AEGIS, or execution policy.
- * Mainnet-capable rails stay dry-run by default until an operator explicitly
- * enables a signer and approval path.
+ * Arc mainnet launched 2026-09-16, but its mainnet chain identifier is kept
+ * outside this compiled registry until verified against current Arc network
+ * documentation. This prevents an unverified constant from reaching live code.
  */
 export const EVM_CHAINS = {
   BASE: {
@@ -78,18 +71,6 @@ export const EVM_CHAINS = {
     dryRunByDefault: true,
     enabled: true,
   },
-  ARC: {
-    chainId: 5042,
-    name: "Arc",
-    slug: "arc",
-    nativeCurrency: "USDC",
-    nativeCurrencyDecimals: 18,
-    settlementConfirmations: 1,
-    rpcEnvVar: "ARC_MAINNET_RPC_URL",
-    explorerUrl: "https://explorer.arc.io",
-    dryRunByDefault: true,
-    enabled: true,
-  },
   ARC_TESTNET: {
     chainId: 5042002,
     name: "Arc Testnet",
@@ -98,6 +79,7 @@ export const EVM_CHAINS = {
     nativeCurrencyDecimals: 18,
     settlementConfirmations: 1,
     rpcEnvVar: "ARC_TESTNET_RPC_URL",
+    explorerUrl: "https://testnet.arcscan.app",
     dryRunByDefault: true,
     enabled: true,
   },
@@ -124,12 +106,8 @@ export const EVM_CHAINS = {
 } as const satisfies Record<string, EvmChainConfig>;
 
 export type EvmChain = (typeof EVM_CHAINS)[keyof typeof EVM_CHAINS];
-export type SettlementRailSlug = EvmChain["slug"];
+export type SettlementRailSlug = EvmChain["slug"] | "arc-mainnet";
 
-/**
- * Base remains the architectural default. Arc is a first-class optional rail,
- * never a replacement for chain-agnostic routing.
- */
 export const DEFAULT_EVM_CHAIN = EVM_CHAINS.BASE;
 
 export function getEvmChainById(chainId: number): EvmChain | undefined {
@@ -140,9 +118,12 @@ export function getEvmChainBySlug(slug: string): EvmChain | undefined {
   return Object.values(EVM_CHAINS).find((chain) => chain.slug === slug);
 }
 
+export interface ExternalEvmRailConfig extends EvmChainConfig {
+  source: "operator-config";
+}
+
 export interface WalletExecutionContext {
   chainId: number;
-  /** Optional human-readable route request; chainId remains authoritative. */
   settlementRail?: SettlementRailSlug;
   walletRole: WalletRole;
   walletAddress?: EvmAddress;
@@ -167,14 +148,10 @@ export interface PaymentRequest {
   amountUsdc: UsdcAmount;
   description: string;
   dryRun: boolean;
-  requestedAt: string; // ISO 8601
+  requestedAt: string;
   execution?: WalletExecutionContext;
   metadata?: Record<string, unknown>;
 }
-
-// ---------------------------------------------------------------------------
-// Payment result
-// ---------------------------------------------------------------------------
 
 export type PaymentStatus =
   | "dry-run-accepted"
@@ -192,10 +169,6 @@ export interface PaymentResult {
   timestamp: string;
 }
 
-// ---------------------------------------------------------------------------
-// Districts
-// ---------------------------------------------------------------------------
-
 export const DISTRICTS = {
   DOWNTOWN: "downtown" as DistrictId,
   HARBOR: "harbor" as DistrictId,
@@ -207,27 +180,19 @@ export const DISTRICTS = {
 
 export type KnownDistrict = (typeof DISTRICTS)[keyof typeof DISTRICTS];
 
-// ---------------------------------------------------------------------------
-// Utility functions
-// ---------------------------------------------------------------------------
-
-/** Format a Date as an ISO 8601 timestamp string */
 export function formatTimestamp(date: Date): string {
   return date.toISOString();
 }
 
-/** Generate a prefixed unique ID using crypto.randomUUID() (Node.js 15.6+) */
 export function generateId(prefix: string): string {
   const uuid = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
   return `${prefix}_${uuid}`;
 }
 
-/** Clamp a number to a min/max range */
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Round settlement USDC to 6 token-interface decimals. */
 export function roundUsdc(amount: UsdcAmount): UsdcAmount {
   return Math.round(amount * 1_000_000) / 1_000_000;
 }
