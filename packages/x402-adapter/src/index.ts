@@ -1,28 +1,19 @@
 // ---------------------------------------------------------------------------
 // AGENTROPOLIS-PAYRAIL — x402-adapter
 //
-// Stub for x402 / USDC on-chain settlement.
+// Guarded x402 / USDC settlement adapters.
 //
-// ⚠️  PHASE 2 ONLY — This module does NOT currently perform real settlement.
 // ⚠️  This module NEVER stores, accepts, or processes private keys or seed phrases.
 // ⚠️  "No agent gets raw wallet power."
 //
-// Real settlement will be implemented in Phase 2 using an external signing
-// service (e.g. hardware wallet, MPC signer, or custodial API). The agent
-// submits a signed payment intent — NOT a raw key.
-//
-// TODO: Phase 2 — integrate x402 protocol (https://x402.org)
-// TODO: Phase 2 — connect to Base testnet USDC contract
-// TODO: Phase 2 — wire receipt-engine.markSettled() after tx confirmation
-// TODO: Phase 2 — implement exponential backoff for tx confirmation polling
-// TODO: Phase 3 — support mainnet USDC settlement with approval gates
+// Real settlement must use an external signing service and pass PAYRAIL policy,
+// Execution Envelope, and AEGIS gates. Base remains the default settlement lane;
+// Arc is an additive, chain-agnostic rail.
 // ---------------------------------------------------------------------------
 
 import type { UsdcAmount } from "@agentropolis/payrail-core";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+export * from "./arc";
 
 /** A settlement request sent to the x402 adapter.
  *  Note: contains NO private key — signing happens in an external service. */
@@ -44,31 +35,22 @@ export interface SettlementResult {
   simulatedOnly: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
-
 /**
- * Settle a payment via x402 / USDC.
+ * Settle a payment via the legacy/default x402 / USDC lane.
  *
- * Phase 0/1: Always returns a simulated result — no real funds move.
- * Phase 2: Will call external signing service and submit tx to Base.
- *
- * This function intentionally refuses any private key material.
+ * Current behavior is simulation-only. Arc-specific requests should use
+ * settleOnArc(), which is also guarded and simulation-only in this build.
  */
 export async function settle(request: SettlementRequest): Promise<SettlementResult> {
-  // Phase 0/1 stub: simulate settlement
-  // TODO: Phase 2 — replace this block with real x402 HTTP call
   console.warn(
     "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result."
   );
 
-  // Simulate a small async delay (as a real network call would have)
   await new Promise((resolve) => setTimeout(resolve, 50));
 
   return {
     success: true,
-    txHash: null, // TODO: Phase 2 — return real Base tx hash
+    txHash: null,
     message: `[SIMULATED] Settlement of $${request.amountUsdc} USDC to ${request.toAddress} — not yet real.`,
     simulatedOnly: true,
   };
@@ -77,12 +59,12 @@ export async function settle(request: SettlementRequest): Promise<SettlementResu
 /**
  * Verify a settlement by tx hash.
  *
- * Phase 0/1: Always returns unconfirmed.
- * TODO: Phase 2 — query Base RPC to confirm tx finality
+ * Current behavior is intentionally unconfirmed until a live provider adapter
+ * is explicitly enabled.
  */
 export async function verifySettlement(txHash: string): Promise<boolean> {
   console.warn(
-    `[x402-adapter] STUB: verifySettlement(${txHash}) — not implemented. Phase 2.`
+    `[x402-adapter] STUB: verifySettlement(${txHash}) — live verification not enabled.`
   );
   return false;
 }
