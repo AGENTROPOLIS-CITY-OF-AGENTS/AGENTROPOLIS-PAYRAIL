@@ -46,9 +46,8 @@ export interface EvmChainConfig {
 /**
  * Known, verified EVM-compatible rails.
  *
- * Arc mainnet launched 2026-09-16, but its mainnet chain identifier is kept
- * outside this compiled registry until verified against current Arc network
- * documentation. This prevents an unverified constant from reaching live code.
+ * Arc Mainnet metadata below is sourced from the current official Arc network
+ * reference. Live execution remains disabled independently of metadata presence.
  */
 export const EVM_CHAINS = {
   BASE: {
@@ -71,6 +70,18 @@ export const EVM_CHAINS = {
     dryRunByDefault: true,
     enabled: true,
   },
+  ARC_MAINNET: {
+    chainId: 5042,
+    name: "Arc",
+    slug: "arc-mainnet",
+    nativeCurrency: "USDC",
+    nativeCurrencyDecimals: 18,
+    settlementConfirmations: 1,
+    rpcEnvVar: "ARC_MAINNET_RPC_URL",
+    explorerUrl: "https://explorer.arc.io",
+    dryRunByDefault: true,
+    enabled: false,
+  },
   ARC_TESTNET: {
     chainId: 5042002,
     name: "Arc Testnet",
@@ -79,7 +90,7 @@ export const EVM_CHAINS = {
     nativeCurrencyDecimals: 18,
     settlementConfirmations: 1,
     rpcEnvVar: "ARC_TESTNET_RPC_URL",
-    explorerUrl: "https://testnet.arcscan.app",
+    explorerUrl: "https://explorer.testnet.arc.io",
     dryRunByDefault: true,
     enabled: true,
   },
@@ -106,7 +117,7 @@ export const EVM_CHAINS = {
 } as const satisfies Record<string, EvmChainConfig>;
 
 export type EvmChain = (typeof EVM_CHAINS)[keyof typeof EVM_CHAINS];
-export type SettlementRailSlug = EvmChain["slug"] | "arc-mainnet";
+export type SettlementRailSlug = EvmChain["slug"];
 
 export const DEFAULT_EVM_CHAIN = EVM_CHAINS.BASE;
 
