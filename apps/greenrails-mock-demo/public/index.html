@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GREENRAILS mock demo</title>
+    <style>
+      :root { color-scheme: dark; --bg: #0b0f0d; --fg: #e6efe9; --muted: #8aa094; --accent: #3ddc84; --warn: #ffb347; --line: #1f2a24; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+      #banner { position: sticky; top: 0; z-index: 10; background: var(--warn); color: #000; font-weight: 700; letter-spacing: .04em; text-align: center; padding: 10px; }
+      main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+      header h1 { margin: 0 0 4px; font-size: 20px; }
+      header p { margin: 0; color: var(--muted); }
+      #scenarios { display: flex; flex-wrap: wrap; gap: 8px; }
+      button { background: #14201a; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+      button:hover { border-color: var(--accent); }
+      #scenario-desc { color: var(--muted); min-height: 1.4em; }
+      #stepper { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+      .step, .chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+      .step.done, .chip.done { border-color: var(--accent); color: var(--fg); }
+      .step.current { background: var(--accent); color: #000; border-color: var(--accent); }
+      .chip.current { background: var(--warn); color: #000; border-color: var(--warn); }
+      #terminal { display: flex; flex-wrap: wrap; gap: 6px; }
+      section { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+      section h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+      dt { color: var(--muted); }
+      dd { margin: 0; font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
+      #events { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+      #events li { display: grid; grid-template-columns: 220px 300px 1fr; gap: 12px; font-size: 12px; }
+      .evid { color: var(--muted); }
+      .evtype { font-family: ui-monospace, monospace; }
+      pre { margin: 0; font-size: 12px; overflow: auto; background: #070a08; padding: 8px; border-radius: 6px; }
+      .muted { color: var(--muted); }
+      footer { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 0 32px; }
+    </style>
+  </head>
+  <body>
+    <div id="banner">MOCK SETTLEMENT · NO FUNDS WILL MOVE</div>
+    <main>
+      <header>
+        <h1>GREENRAILS mock settlement demo</h1>
+        <p>In-memory state machine walkthrough for GREENRAILS × $XENTS × HOOD TERPS. No wallet, RPC, or payment API is called.</p>
+      </header>
+      <section>
+        <h2>Scenarios</h2>
+        <div id="scenarios"></div>
+        <p id="scenario-desc"></p>
+      </section>
+      <section>
+        <h2>Success path</h2>
+        <ol id="stepper"></ol>
+        <h2 style="margin-top:12px">Failure / terminal states</h2>
+        <div id="terminal"></div>
+      </section>
+      <section>
+        <h2>Trade</h2>
+        <div id="summary"></div>
+      </section>
+      <section>
+        <h2>Events (idempotent ids)</h2>
+        <ul id="events"></ul>
+      </section>
+      <section id="receipt"></section>
+    </main>
+    <footer>Demonstration only. No financial product is offered.</footer>
+    <script type="module" src="./src/ui/main.js"></script>
+  </body>
+</html>

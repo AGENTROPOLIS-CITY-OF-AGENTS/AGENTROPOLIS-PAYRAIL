@@ -1,0 +1,19 @@
+{
+  "name": "@agentropolis/greenrails-mock-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static MOCK demo of the GREENRAILS settlement state machine. No funds move.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/",
+    "serve": "node scripts/serve.mjs",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}
