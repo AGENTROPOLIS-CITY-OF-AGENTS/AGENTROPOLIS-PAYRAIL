@@ -5,7 +5,8 @@
 The micropayment rail for autonomous agents inside **Agentropolis**. AGENTROPOLIS-PAYRAIL handles district billing, wallet guardrails, task receipts, spending limits, dry-run mode, and audit-safe AI commerce.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![Rust](https://img.shields.io/badge/Rust-finance--core-orange)](https://www.rust-lang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-interface-blue)](https://www.typescriptlang.org/)
 [![pnpm workspaces](https://img.shields.io/badge/pnpm-workspaces-orange)](https://pnpm.io/workspaces)
 
 ---
@@ -50,6 +51,20 @@ AGENTROPOLIS-PAYRAIL should treat this as an external ecosystem map, not as a re
 
 ---
 
+## Stellar Recovery Rail
+
+PAYRAIL now owns a Rust-first, fail-closed recovery-policy core at `packages/stellar-recovery-rail`.
+
+- XLM is used for Stellar fees and reserves; native XLM is not described as recoverable after settlement.
+- Recoverable flows use audited Soroban escrow or a disclosed clawback-enabled issuer asset.
+- Transaction, daily, reserve-outflow, destination, anomaly, cooling-window, and Guardian-quorum controls execute before signing.
+- Native BTC and other external irreversible assets remain unrecoverable once released from controlled escrow.
+- Fiscal applications consume signed policy decisions and receipts; browser and agent layers cannot override them.
+
+See [`docs/STELLAR-RECOVERY-RAIL.md`](docs/STELLAR-RECOVERY-RAIL.md).
+
+---
+
 ## Architecture
 
 ```
@@ -60,6 +75,7 @@ AGENTROPOLIS-PAYRAIL/
 │
 ├── packages/
 │   ├── payrail-core/       # Shared types, utilities, constants
+│   ├── stellar-recovery-rail/ # Rust fiscal policy and recovery-boundary engine
 │   ├── wallet-guard/       # Policy engine, enforces spend limits and guardrails
 │   ├── receipt-engine/     # Creates, validates, and stores task receipts
 │   ├── pricing-rules/      # District pricing rules (JSON-configurable)
