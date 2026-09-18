@@ -35,9 +35,9 @@ export interface ArcSettlementResult {
  * Invariants:
  * - agents never provide private keys or mnemonics;
  * - live settlement requires an external signer and explicit approval refs;
- * - Arc testnet is compiled from verified public network metadata;
- * - Arc mainnet metadata is operator-supplied until independently verified;
- * - this adapter cannot bypass wallet-guard / AEGIS / Execution Envelope.
+ * - Arc testnet and mainnet metadata are compiled from current official references;
+ * - metadata presence does not enable live settlement;
+ * - this adapter cannot bypass FISCALITH / AEGIS / 54T / Execution Envelope gates.
  */
 export async function settleOnArc(
   request: ArcSettlementRequest,
@@ -58,14 +58,16 @@ export async function settleOnArc(
     };
   }
 
-  // Mainnet may only be activated after current network metadata is supplied by
-  // trusted operator configuration and the request has passed explicit gates.
+  const chain = EVM_CHAINS.ARC_MAINNET;
+
+  // Mainnet metadata is known, but live execution remains disabled until the
+  // external signer, 54T trust boundary, replay/idempotency and approval gates exist.
   if (!request.approvalRef || !request.executionEnvelopeRef || !request.aegisDecisionRef) {
     return {
       success: false,
       simulatedOnly: true,
       rail: request.rail,
-      chainId: null,
+      chainId: chain.chainId,
       txHash: null,
       receiptId: request.receiptId,
       message:
@@ -77,10 +79,10 @@ export async function settleOnArc(
     success: false,
     simulatedOnly: true,
     rail: request.rail,
-    chainId: null,
+    chainId: chain.chainId,
     txHash: null,
     receiptId: request.receiptId,
     message:
-      "Arc mainnet is configuration-only in this build. Verify current Arc mainnet network metadata and attach an external signer before enabling live settlement.",
+      "Arc mainnet metadata is verified, but live settlement remains disabled until the external signer, 54T integrity, replay/idempotency and operator gates are implemented and approved.",
   };
 }
