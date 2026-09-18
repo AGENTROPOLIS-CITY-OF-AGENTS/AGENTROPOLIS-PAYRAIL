@@ -2,111 +2,107 @@
 
 Status: guarded reference implementation
 
-Arc is an optional settlement rail beneath AGENTROPOLIS governance. It is not a policy engine, treasury authority, identity system, or replacement for PAYRAIL.
+Arc is an optional settlement rail beneath AGENTROPOLIS governance. It is not a policy engine, treasury authority, identity system, agent language, financial language, or replacement for PAYRAIL.
 
 ## Canonical Corridor
 
 ```text
-AGENT / AGENTENTITY ECONOMIC INTENT
-  -> PAYRAIL gateway
-  -> wallet-guard
-  -> ATG compiled policy
+AGENTENTITY
+  -> ATRALITH / ATG
+  -> FISCALITH financial intent
   -> Execution Envelope
-  -> AEGIS / fiscal gate
-  -> x402 / settlement adapter
-  -> external signer
-  -> selected rail (Arc, Base, XRPL, etc.)
-  -> settlement receipt
-  -> audit / ontology / drift monitoring
+  -> AEGIS authority / risk decision
+  -> 54T trust enforcement
+  -> PAYRAIL provider / rail selection
+  -> Circle App Kit / x402 / direct settlement adapter
+  -> external signer / scoped wallet provider
+  -> selected rail
+  -> settlement receipt + Proof Graph
 ```
+
+AQUADUCT owns sandbox/testnet proving when a provider, adapter or capability requires certification.
 
 No settlement rail may bypass the corridor.
 
-## Arc Network Posture
+## Verified Arc Network Metadata
 
-### Arc Testnet
-
-The compiled testnet profile uses currently verified public network metadata:
-
-- chain id: `5042002`
-- native gas token: USDC
-- native gas decimals: 18
-- PAYRAIL confirmation floor: 1 deterministic-finality confirmation
-- RPC is supplied through `ARC_TESTNET_RPC_URL`
-- explorer: `https://testnet.arcscan.app`
-- `dryRunByDefault: true`
+Current official Arc network references publish:
 
 ### Arc Mainnet
 
-Arc mainnet is treated as a supported target, but its chain metadata is deliberately not hard-coded here until independently verified against current Arc mainnet network documentation.
+- chain id: `5042`
+- RPC: `https://rpc.mainnet.arc.io`
+- native gas token: USDC
+- native gas decimals: 18
+- explorer: `https://explorer.arc.io`
+- PAYRAIL confirmation floor: 1 deterministic-finality confirmation
+- compiled profile remains `dryRunByDefault: true`
+- live adapter flag remains disabled
 
-Activation requires all of the following:
+### Arc Testnet
 
-1. verified chain id and RPC configuration;
-2. external signer / wallet provider;
-3. wallet-guard approval;
-4. Execution Envelope reference;
-5. AEGIS decision reference;
-6. task-bound receipt id;
-7. replay and concurrency protection;
-8. operator-controlled live-settlement flag.
+- chain id: `5042002`
+- RPC: `https://rpc.testnet.arc.io`
+- native gas token: USDC
+- native gas decimals: 18
+- explorer: `https://explorer.testnet.arc.io`
+- PAYRAIL confirmation floor: 1 deterministic-finality confirmation
 
-Until all gates exist, the adapter must refuse live settlement.
+## Activation boundary
+
+Verified network metadata is **not** authorization for live mainnet settlement.
+
+Production activation still requires:
+1. external/scoped signer provider;
+2. FISCALITH intent and mandate reference;
+3. Execution Envelope reference;
+4. AEGIS decision reference;
+5. 54T intent/signer/capability integrity attestation;
+6. replay and concurrency protection;
+7. task-bound settlement receipt;
+8. operator-controlled live-settlement flag;
+9. provider/adapter certification where required.
+
+Until these gates exist, the adapter refuses live settlement.
+
+## Circle App Kit
+
+PAYRAIL may use Circle App Kit as a provider for Send, Bridge, Swap, Unified Balance, Onramp and Earn where supported.
+
+Circle App Kit does not become the router. PAYRAIL remains responsible for provider/rail selection after policy and authority checks.
+
+Runtime provider support SHOULD be discovered dynamically rather than copied into FISCALITH.
+
+## 54T boundary
+
+54T enforces:
+- no raw private keys to agents;
+- canonical financial-intent binding;
+- recipient / amount / asset / fee integrity;
+- provider/RPC allowlists;
+- quote integrity and expiry;
+- capability attenuation;
+- egress restrictions;
+- replay/idempotency;
+- partial-execution recovery safety.
+
+## Bridge recovery
+
+Multi-step Bridge execution may partially succeed. A successful source burn MUST remain recorded if a later attestation or mint step fails.
+
+> **Retry the state, not the money.**
 
 ## AGENTENTITY Boundary
 
-AGENTENTITY owns persistent entity identity, provenance, portable state, memory boundaries, game lineage, and ownership semantics. PAYRAIL owns payment intent, policy-gated settlement, and economic receipts.
-
-PAYRAIL must never embed private AGENTENTITY memory, credentials, signing material, or private owner context into a settlement request or receipt.
-
-### Human-to-human Agent TCG trade
-
-```text
-Human A owns AGENTENTITY: RED FANG
-  -> trade intent
-  -> AGENTENTITY validates transferable game state
-  -> PAYRAIL prices and authorizes economic intent
-  -> Execution Envelope + AEGIS gate
-  -> Arc/USDC settlement adapter
-  -> settlement receipt
-  -> AGENTENTITY ownership transfer
-  -> Human B receives RED FANG
-  -> public lineage + permitted portable battle state move
-  -> Human A private memory + secrets remain owner-bound
-```
-
-Settlement does not itself transfer the entity. The AGENTENTITY layer consumes a successful, task-bound settlement receipt and performs the governed ownership transition.
-
-## Reference Game Profile
-
-The first reference application can be `AGENTENTITY::GAME::TCG`:
-
-- humans collect and command Agent Entities;
-- Agent Entities battle within a competitive intelligence envelope;
-- battle/evolution/achievement state is portable according to profile rules;
-- economic trades use PAYRAIL intents and receipts;
-- Arc can serve as a USDC settlement rail;
-- blockchain ownership is optional at the AGENTENTITY protocol layer.
+PAYRAIL settlement does not itself transfer AGENTENTITY ownership, credentials, private memory or controller state. Entity state transition consumes independently verified settlement evidence.
 
 ## Required Invariants
 
 - No agent gets raw wallet power.
-- No private keys or seed phrases in prompts, receipts, logs, or entity state.
+- ATRALITH/ATG remains the agent language.
+- FISCALITH owns financial semantics.
 - Arc is a rail, not the economic brain.
-- Base remains the default EVM lane unless policy routing selects another rail.
-- Mainnet remains dry-run/configuration-only until its current network metadata and signer path are verified.
-- A payment success cannot silently imply an AGENTENTITY transfer.
-- Entity transfer must be atomic/idempotent at the application layer and reference the settlement receipt.
-- Previous-owner private memory and credentials never transfer with a traded Agent Entity.
-- Every consequential action emits a receipt.
-
-## Next Implementation Gates
-
-1. Add Arc mainnet metadata only after current official verification.
-2. Add external signer provider interface.
-3. Implement x402 request/response verification.
-4. Add replay/idempotency keys to settlement calls.
-5. Bind receipt-engine settlement records to rail and chain id.
-6. Add testnet end-to-end trade fixture for `AGENTENTITY::GAME::TCG`.
-7. Add failure-path tests: signer unavailable, policy denied, expired envelope, replay attempt, settlement succeeds/entity transfer fails.
-8. Add compensating-state workflow so settlement and entity transfer cannot drift silently.
+- 54T SAFE does not mean AEGIS-authorized.
+- AQUADUCT test success does not grant mainnet authority.
+- Settlement success does not silently imply an AGENTENTITY transfer.
+- Every consequential economic action emits a receipt.
