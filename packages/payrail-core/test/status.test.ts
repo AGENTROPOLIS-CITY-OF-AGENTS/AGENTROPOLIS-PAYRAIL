@@ -78,3 +78,14 @@ test("discriminated union narrows correctly", () => {
     }
   }
 });
+
+test("PENDING without a txHash is not treated as transaction evidence", () => {
+  const outcome = pendingOutcome("queued");
+  assert.equal(hasTxHash(outcome), false);
+  assert.equal(getTxHash(outcome), undefined);
+});
+
+test("SETTLED rejects an empty transaction hash", () => {
+  assert.throws(() => settledOutcome("settled", ""), /non-empty/);
+  assert.throws(() => settledOutcome("settled", "   "), /non-empty/);
+});
