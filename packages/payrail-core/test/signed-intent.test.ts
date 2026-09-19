@@ -124,3 +124,43 @@ test("verifySignedIntentBinding detects multiple mismatches", () => {
   });
   assert.deepEqual(mismatches.sort(), ["actor", "chain", "provider"].sort());
 });
+
+test("missing or malformed bindings are returned as validation problems", () => {
+  const missing = { version: 1, intentId: "bad" } as unknown as SignedIntent;
+  assert.deepEqual(validateSignedIntentBindings(missing), ["bindings object is required"]);
+
+  const malformed = {
+    version: 1,
+    intentId: "bad-2",
+    bindings: [],
+  } as unknown as SignedIntent;
+  assert.deepEqual(validateSignedIntentBindings(malformed), ["bindings object is required"]);
+});
+
+test("expired and malformed quote expirations are rejected", () => {
+  const expired = validIntent({
+    quote: {
+      quoteId: "q-expired",
+      quoteHash: "0xexpired",
+      amountMinorUnits: 50000n,
+      expiresAt: ISO(NOW - 60_000),
+    },
+  });
+  assert.ok(
+    validateSignedIntentBindings(expired).includes("quote.expiresAt is in the past"),
+  );
+
+  const malformed = validIntent({
+    quote: {
+      quoteId: "q-malformed",
+      quoteHash: "0xmalformed",
+      amountMinorUnits: 50000n,
+      expiresAt: "not-a-date",
+    },
+  });
+  assert.ok(
+    validateSignedIntentBindings(malformed).includes(
+      "quote.expiresAt is not a valid ISO 8601 timestamp",
+    ),
+  );
+});
