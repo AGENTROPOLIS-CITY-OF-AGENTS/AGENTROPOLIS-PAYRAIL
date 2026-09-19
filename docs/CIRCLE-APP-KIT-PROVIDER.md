@@ -43,6 +43,8 @@ ATG message
   -> normalized settlement evidence
 ```
 
+PAYRAIL may route approved operations to Circle App Kit.
+
 ## Capability mapping
 
 | FISCALITH | Circle App Kit |
@@ -54,6 +56,18 @@ ATG message
 | ONRAMP | Onramp |
 | EARN | Earn |
 
+## Rules
+
+- provider support is discovered dynamically when possible;
+- application/custom fees are explicit financial semantics;
+- estimate before execute when the provider supports estimates;
+- signer credentials never enter agent prompts or receipts;
+- raw-key provider adapters are not a production agent path;
+- unsupported gas sponsorship is an explicit route constraint;
+- provider errors preserve partial financial state for recovery;
+- crosschain pending is not settlement;
+- provider selection cannot bypass AEGIS or 54T.
+
 ## Security boundary
 
 - Never place Circle API keys in client-side code.
@@ -63,3 +77,7 @@ ATG message
 - Preserve gas-sponsorship-first policy where supported.
 - Production calls require task-bound approval and receipt references.
 - Provider success must be independently normalized into PAYRAIL receipt evidence.
+
+## Certification
+
+Material Circle App Kit adapter changes SHOULD be re-proven through AQUADUCT and consumed by the Forge before production eligibility changes.
