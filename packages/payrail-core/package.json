@@ -1,7 +1,7 @@
 {
   "name": "@agentropolis/payrail-core",
-  "version": "0.2.0",
-  "description": "Shared types, utilities, and constants for AGENTROPOLIS-PAYRAIL",
+  "version": "0.3.0",
+  "description": "Shared types, exact-money utilities, and constants for AGENTROPOLIS-PAYRAIL",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "pnpm run build && node --test test/*.test.cjs",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
