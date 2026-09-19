@@ -65,3 +65,42 @@ test("receipt status uses the canonical vocabulary", () => {
     assert.equal(receipt.status, status);
   }
 });
+
+test("receipt creation rejects contradictory settlement evidence", () => {
+  assert.throws(
+    () =>
+      createReceipt(
+        baseInput({
+          status: "SIMULATED",
+          settlement: {
+            status: "SETTLED",
+            txHash: "0xabc",
+            settledAt: "2026-01-01T00:00:00Z",
+          },
+        }),
+      ),
+    /does not match/,
+  );
+
+  assert.throws(
+    () => createReceipt(baseInput({ status: "SETTLED", settlement: undefined })),
+    /requires settlement evidence/,
+  );
+});
+
+test("SETTLED receipt rejects empty transaction evidence", () => {
+  assert.throws(
+    () =>
+      createReceipt(
+        baseInput({
+          status: "SETTLED",
+          settlement: {
+            status: "SETTLED",
+            txHash: "",
+            settledAt: "2026-01-01T00:00:00Z",
+          },
+        }),
+      ),
+    /non-empty txHash/,
+  );
+});
