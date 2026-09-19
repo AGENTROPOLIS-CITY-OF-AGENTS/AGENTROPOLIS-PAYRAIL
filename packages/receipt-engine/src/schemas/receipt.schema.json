@@ -50,7 +50,7 @@
     "amountUsdc": {
       "type": "number",
       "minimum": 0,
-      "description": "USDC amount charged for this task"
+      "description": "USDC amount charged for this task (6-decimal ERC-20 USDC)"
     },
     "currency": {
       "type": "string",
@@ -59,16 +59,32 @@
     },
     "status": {
       "type": "string",
-      "enum": ["dry-run-accepted", "pending-approval", "settled", "failed", "cancelled"],
-      "description": "Final status of the payment associated with this receipt"
+      "enum": ["SIMULATED", "PENDING", "SETTLED", "BLOCKED", "FAILED", "CANCELLED"],
+      "description": "Canonical settlement status of the payment associated with this receipt"
     },
     "dryRun": {
       "type": "boolean",
       "description": "True if this receipt was generated in dry-run mode (no real funds moved)"
     },
-    "settlementTxHash": {
-      "type": ["string", "null"],
-      "description": "On-chain transaction hash after settlement. Null for dry-run or pending. TODO: populated by x402-adapter (Phase 2)"
+    "settlement": {
+      "type": ["object", "null"],
+      "description": "Settlement evidence. txHash is absent for SIMULATED / BLOCKED / FAILED.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["SIMULATED", "PENDING", "SETTLED", "BLOCKED", "FAILED"]
+        },
+        "txHash": {
+          "type": "string",
+          "description": "On-chain transaction hash. Present only for PENDING / SETTLED."
+        },
+        "settledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when settlement was confirmed on-chain."
+        }
+      },
+      "required": ["status"]
     },
     "policyId": {
       "type": "string",
@@ -78,11 +94,6 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp when this receipt was created"
-    },
-    "settledAt": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "ISO 8601 timestamp when settlement was confirmed on-chain. Null until settled."
     },
     "metadata": {
       "type": "object",

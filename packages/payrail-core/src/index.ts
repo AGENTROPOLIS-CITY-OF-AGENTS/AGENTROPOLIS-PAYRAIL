@@ -14,7 +14,26 @@ export type DistrictId = string & { readonly __brand: "DistrictId" };
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ReceiptId = string & { readonly __brand: "ReceiptId" };
 export type PolicyId = string & { readonly __brand: "PolicyId" };
+
+/**
+ * Legacy float USDC amount (6-decimal ERC-20 USDC), e.g. 0.05 = $0.05.
+ *
+ * ⚠️  DEPRECATED for new code. Floating-point money is unsafe. Use the
+ * integer-safe Money / minor-units helpers in ./money instead. This type is
+ * retained only for backward compatibility with existing callers.
+ */
 export type UsdcAmount = number;
+
+// ---------------------------------------------------------------------------
+// Integer-safe money + settlement status + intent binding
+// ---------------------------------------------------------------------------
+
+export * from "./money";
+export * from "./status";
+export * from "./signed-intent";
+export * from "./replay";
+export * from "./redact";
+export * from "./rpc-integrity";
 
 // ---------------------------------------------------------------------------
 // Chain-agnostic EVM settlement architecture

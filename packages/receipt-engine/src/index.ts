@@ -4,6 +4,10 @@
 //
 // Receipts are immutable records. Once issued, they are never modified.
 // Settled receipts include a tx hash from the x402-adapter (Phase 2).
+//
+// The receipt status uses the canonical SettlementStatus vocabulary
+// (SIMULATED / PENDING / SETTLED / BLOCKED / FAILED). A SIMULATED receipt
+// NEVER carries a txHash.
 // ---------------------------------------------------------------------------
 
 import {
@@ -15,6 +19,7 @@ import {
   type TaskId,
   type ReceiptId,
   type UsdcAmount,
+  type SettlementStatus,
 } from "@agentropolis/payrail-core";
 
 export const RECEIPT_SCHEMA_VERSION = "1.0.0";
@@ -23,12 +28,15 @@ export const RECEIPT_SCHEMA_VERSION = "1.0.0";
 // Receipt type
 // ---------------------------------------------------------------------------
 
-export type ReceiptStatus =
-  | "dry-run-accepted"
-  | "pending-approval"
-  | "settled"
-  | "failed"
-  | "cancelled";
+export type ReceiptStatus = SettlementStatus | "CANCELLED";
+
+/** Settlement evidence attached to a receipt. */
+export interface ReceiptSettlement {
+  status: SettlementStatus;
+  /** Present only for PENDING / SETTLED. A SIMULATED receipt never has one. */
+  txHash?: string;
+  settledAt?: string;
+}
 
 export interface AgentTaskReceipt {
   receiptId: ReceiptId;
@@ -42,11 +50,10 @@ export interface AgentTaskReceipt {
   currency: "USDC";
   status: ReceiptStatus;
   dryRun: boolean;
-  /** TODO: Phase 2 — x402-adapter populates this after on-chain settlement */
-  settlementTxHash: string | null;
+  /** Settlement evidence. txHash is absent for SIMULATED / BLOCKED / FAILED. */
+  settlement: ReceiptSettlement | null;
   policyId?: string;
   issuedAt: string;
-  settledAt: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -60,6 +67,7 @@ export interface CreateReceiptInput {
   status: ReceiptStatus;
   dryRun: boolean;
   policyId?: string;
+  settlement?: ReceiptSettlement;
   metadata?: Record<string, unknown>;
 }
 
@@ -72,7 +80,7 @@ const receiptStore = new Map<ReceiptId, AgentTaskReceipt>();
 
 console.warn(
   "[receipt-engine] WARNING: Using in-memory receipt store. All receipts are lost on restart. " +
-    "Replace with persistent storage in Phase 1."
+    "Replace with persistent storage in Phase 1.",
 );
 
 // ---------------------------------------------------------------------------
@@ -99,10 +107,9 @@ export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
     currency: "USDC",
     status: input.status,
     dryRun: input.dryRun,
-    settlementTxHash: null,
+    settlement: input.settlement ?? null,
     policyId: input.policyId,
     issuedAt: now,
-    settledAt: null,
     metadata: input.metadata,
   };
 
@@ -128,9 +135,12 @@ export function markSettled(receiptId: ReceiptId, txHash: string): AgentTaskRece
   }
   const settled: AgentTaskReceipt = {
     ...receipt,
-    status: "settled",
-    settlementTxHash: txHash,
-    settledAt: formatTimestamp(new Date()),
+    status: "SETTLED",
+    settlement: {
+      status: "SETTLED",
+      txHash,
+      settledAt: formatTimestamp(new Date()),
+    },
   };
   receiptStore.set(receiptId, settled);
   return settled;
@@ -149,6 +159,7 @@ export function listReceipts(): AgentTaskReceipt[] {
  */
 export function printReceipt(receipt: AgentTaskReceipt): void {
   const dryTag = receipt.dryRun ? " [DRY-RUN]" : "";
+  const txHash = receipt.settlement?.txHash ?? "—";
   console.log("─────────────────────────────────────────");
   console.log(`AGENTROPOLIS-PAYRAIL RECEIPT${dryTag}`);
   console.log("─────────────────────────────────────────");
@@ -160,8 +171,7 @@ export function printReceipt(receipt: AgentTaskReceipt): void {
   console.log(`Description:  ${receipt.description}`);
   console.log(`Amount:       $${receipt.amountUsdc} ${receipt.currency}`);
   console.log(`Status:       ${receipt.status}`);
-  console.log(`TX Hash:      ${receipt.settlementTxHash ?? "—"}`);
+  console.log(`TX Hash:      ${txHash}`);
   console.log(`Issued At:    ${receipt.issuedAt}`);
-  console.log(`Settled At:   ${receipt.settledAt ?? "—"}`);
   console.log("─────────────────────────────────────────");
 }

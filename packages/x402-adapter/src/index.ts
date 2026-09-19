@@ -9,9 +9,19 @@
 // Real settlement must use an external signing service and pass PAYRAIL policy,
 // Execution Envelope, and AEGIS gates. Base remains the default settlement lane;
 // Arc is an additive, chain-agnostic rail.
+//
+// Result shapes use the canonical SettlementOutcome vocabulary
+// (SIMULATED / PENDING / SETTLED / BLOCKED / FAILED). A SIMULATED result
+// NEVER carries a txHash.
 // ---------------------------------------------------------------------------
 
 import type { UsdcAmount } from "@agentropolis/payrail-core";
+import {
+  ReplayGuard,
+  redactSecrets,
+  simulatedOutcome,
+  type SettlementOutcome,
+} from "@agentropolis/payrail-core";
 
 export * from "./arc";
 
@@ -24,36 +34,55 @@ export interface SettlementRequest {
   toAddress: string;
   amountUsdc: UsdcAmount;
   taskId: string;
-  /** Signed payment intent from external signing service (Phase 2) */
+  /** Unique idempotency key for replay protection. */
+  idempotencyKey: string;
+  /** Signed payment intent from external signing service (Phase 2). */
   signedIntent?: string;
 }
 
-export interface SettlementResult {
-  success: boolean;
-  txHash: string | null;
-  message: string;
-  simulatedOnly: boolean;
-}
+/**
+ * Module-level replay guard.
+ *
+ * ⚠️  NON-DURABLE / NOT PRODUCTION COMPLETE — in-memory only, resets on
+ * restart. Phase 1 must replace with a persistent store before live settlement.
+ */
+export const replayGuard = new ReplayGuard();
 
 /**
  * Settle a payment via the legacy/default x402 / USDC lane.
  *
  * Current behavior is simulation-only. Arc-specific requests should use
  * settleOnArc(), which is also guarded and simulation-only in this build.
+ *
+ * Returns a SettlementOutcome. A SIMULATED outcome never carries a txHash.
  */
-export async function settle(request: SettlementRequest): Promise<SettlementResult> {
+export async function settle(request: SettlementRequest): Promise<SettlementOutcome> {
+  // Replay protection: refuse a duplicate idempotency key.
+  if (replayGuard.isReplay(request.idempotencyKey)) {
+    return {
+      status: "BLOCKED",
+      message: "Replay detected: idempotency key already used.",
+      reason: "duplicate-idempotency-key",
+    };
+  }
+
   console.warn(
-    "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result."
+    "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result.",
   );
 
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  return {
-    success: true,
-    txHash: null,
-    message: `[SIMULATED] Settlement of $${request.amountUsdc} USDC to ${request.toAddress} — not yet real.`,
-    simulatedOnly: true,
-  };
+  const outcome = simulatedOutcome(
+    redactSecrets(
+      `[SIMULATED] Settlement of $${request.amountUsdc} USDC to ${request.toAddress} — not yet real.`,
+    ),
+    `sim-${request.idempotencyKey}`,
+  );
+
+  // Record the outcome for idempotent replay.
+  replayGuard.recordIfAbsent(request.idempotencyKey, outcome);
+
+  return outcome;
 }
 
 /**
@@ -64,7 +93,7 @@ export async function settle(request: SettlementRequest): Promise<SettlementResu
  */
 export async function verifySettlement(txHash: string): Promise<boolean> {
   console.warn(
-    `[x402-adapter] STUB: verifySettlement(${txHash}) — live verification not enabled.`
+    `[x402-adapter] STUB: verifySettlement(${txHash}) — live verification not enabled.`,
   );
   return false;
 }

@@ -1,6 +1,12 @@
 // AGENTROPOLIS-PAYRAIL — Monero/XMR adapter
 // Dry-run reference implementation only. No wallet RPC, signing, custody,
 // private keys, seed phrases, spend keys, or production configuration.
+//
+// Result shapes use the canonical SettlementOutcome vocabulary
+// (SIMULATED / BLOCKED / FAILED). A SIMULATED result never carries a txId.
+
+import type { SettlementOutcome } from "@agentropolis/payrail-core";
+import { blockedOutcome, failedOutcome, simulatedOutcome } from "@agentropolis/payrail-core";
 
 export type PrivacyDecision = "approved" | "denied" | "approval-required";
 
@@ -20,8 +26,7 @@ export interface MoneroSettlementRequest {
 }
 
 export interface MoneroSettlementResult {
-  success: boolean;
-  status: "simulated" | "blocked" | "approval-required";
+  outcome: SettlementOutcome;
   txId: null;
   simulatedOnly: true;
   message: string;
@@ -74,8 +79,10 @@ export async function simulateMoneroSettlement(
 
   if (request.privacyDecision === "denied") {
     return {
-      success: false,
-      status: "blocked",
+      outcome: blockedOutcome(
+        "Hush54 privacy policy denied XMR settlement.",
+        "privacy-policy-denied",
+      ),
       txId: null,
       simulatedOnly: true,
       message: "Hush54 privacy policy denied XMR settlement.",
@@ -85,8 +92,10 @@ export async function simulateMoneroSettlement(
 
   if (request.privacyDecision === "approval-required") {
     return {
-      success: false,
-      status: "approval-required",
+      outcome: failedOutcome(
+        "Explicit approval is required before XMR settlement may proceed.",
+        "approval-required",
+      ),
       txId: null,
       simulatedOnly: true,
       message: "Explicit approval is required before XMR settlement may proceed.",
@@ -95,8 +104,10 @@ export async function simulateMoneroSettlement(
   }
 
   return {
-    success: true,
-    status: "simulated",
+    outcome: simulatedOutcome(
+      `[SIMULATED] ${request.amountXmr} XMR settlement authorized by Hush54 policy. No funds moved.`,
+      `sim-${request.idempotencyKey}`,
+    ),
     txId: null,
     simulatedOnly: true,
     message: `[SIMULATED] ${request.amountXmr} XMR settlement authorized by Hush54 policy. No funds moved.`,

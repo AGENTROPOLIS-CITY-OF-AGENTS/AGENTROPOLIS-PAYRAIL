@@ -41,9 +41,11 @@ app.post("/pay", (req: Request, res: Response) => {
     return;
   }
 
-  // Placeholder response — real policy evaluation is Phase 1
+  // Placeholder response — real policy evaluation is Phase 1.
+  // Uses the canonical SettlementStatus vocabulary. A SIMULATED result never
+  // carries a txHash.
   res.status(202).json({
-    status: dryRun ? "dry-run-accepted" : "pending",
+    status: dryRun ? "SIMULATED" : "PENDING",
     message: dryRun
       ? "Dry-run mode: no funds moved. Policy evaluation pending (Phase 1)."
       : "Real settlement not yet implemented. Enable dry-run mode.",

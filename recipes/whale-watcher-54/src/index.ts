@@ -52,7 +52,7 @@ const POLICY: WalletGuardPolicy = {
   policyId: "whale-watcher-54-policy",
   agentId: AGENT_ID,
   maxSpendPerTaskUsdc: 0.05,
-  maxSpendPerDayUsdc: 0.50,
+  maxSpendPerDayUsdc: 0.5,
   approvalThresholdUsdc: 0.04,
   allowedDistricts: [DISTRICTS.HARBOR, DISTRICTS.DOWNTOWN],
   blockedDistricts: ["dark-alley"],
@@ -95,7 +95,7 @@ function generateMockWalletEvents(): WalletEvent[] {
     {
       eventId: generateId("evt"),
       walletAddress: "0xMOCK_HARBOR_WALLET_002",
-      amountUsdc: 150.00,
+      amountUsdc: 150.0,
       direction: "inbound",
       timestamp: formatTimestamp(new Date(now.getTime() - 240_000)),
       districtId: DISTRICTS.HARBOR,
@@ -113,7 +113,7 @@ function generateMockWalletEvents(): WalletEvent[] {
     {
       eventId: generateId("evt"),
       walletAddress: "0xMOCK_HARBOR_WALLET_004",
-      amountUsdc: 500.00,
+      amountUsdc: 500.0,
       direction: "outbound",
       timestamp: formatTimestamp(new Date(now.getTime() - 120_000)),
       districtId: DISTRICTS.HARBOR,
@@ -242,7 +242,7 @@ async function runWhaleWatcher54(): Promise<void> {
       taskType: TASK_TYPE,
       description: `[MOCK] Whale alert — ${alert.severity} — $${alert.amountUsdc} USDC ${alert.direction} on ${alert.walletAddress}`,
       amountUsdc: taskPriceUsdc,
-      status: "dry-run-accepted",
+      status: "SIMULATED",
       dryRun: true,
       policyId: POLICY.policyId,
       metadata: {

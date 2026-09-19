@@ -7,9 +7,13 @@
 // This module NEVER handles private keys, seed phrases, or signing keys.
 // It evaluates policy rules and returns a decision — settlement happens
 // elsewhere (x402-adapter, Phase 2).
+//
+// Money is compared in integer minor units (6-decimal ERC-20 USDC) whenever
+// the policy provides minor-unit limits, avoiding floating-point drift.
 // ---------------------------------------------------------------------------
 
 import type { PaymentRequest, UsdcAmount } from "@agentropolis/payrail-core";
+import { legacyUsdcToMinorUnits } from "@agentropolis/payrail-core";
 
 // ---------------------------------------------------------------------------
 // Policy types
@@ -25,12 +29,20 @@ export interface WalletGuardPolicy {
   blockedDistricts: string[];
   dryRun: boolean;
   notes?: string;
+  /**
+   * Optional integer minor-unit limits (6-decimal ERC-20 USDC). When present,
+   * limit checks use integer arithmetic instead of float comparison.
+   */
+  maxSpendPerTaskMinorUnits?: bigint;
+  maxSpendPerDayMinorUnits?: bigint;
+  approvalThresholdMinorUnits?: bigint;
 }
 
 export type GuardDecision =
-  | { allowed: true; requiresApproval: false; reason: string }
-  | { allowed: true; requiresApproval: true; reason: string }
-  | { allowed: false; requiresApproval: false; reason: string };
+  | { allowed: true; requiresApproval: false; status: "SIMULATED"; reason: string }
+  | { allowed: true; requiresApproval: false; status: "PENDING"; reason: string }
+  | { allowed: true; requiresApproval: true; status: "PENDING"; reason: string }
+  | { allowed: false; requiresApproval: false; status: "BLOCKED"; reason: string };
 
 // ---------------------------------------------------------------------------
 // Daily spend tracking (in-memory — replace with persistent store in Phase 1)
@@ -41,7 +53,7 @@ const dailySpendTracker = new Map<string, { total: UsdcAmount; date: string }>()
 
 console.warn(
   "[wallet-guard] WARNING: Using in-memory daily spend tracker. " +
-    "Limits reset on restart — replace with persistent storage in Phase 1 before production use."
+    "Limits reset on restart — replace with persistent storage in Phase 1 before production use.",
 );
 
 function getDailySpend(agentId: string): UsdcAmount {
@@ -73,7 +85,7 @@ function recordDailySpend(agentId: string, amount: UsdcAmount): void {
  */
 export function evaluatePolicy(
   request: PaymentRequest,
-  policy: WalletGuardPolicy
+  policy: WalletGuardPolicy,
 ): GuardDecision {
   const { amountUsdc, districtId, agentId } = request;
 
@@ -82,6 +94,7 @@ export function evaluatePolicy(
     return {
       allowed: true,
       requiresApproval: false,
+      status: "SIMULATED",
       reason: `[DRY-RUN] Policy evaluated. No funds moved. Amount: $${amountUsdc} USDC`,
     };
   }
@@ -91,6 +104,7 @@ export function evaluatePolicy(
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `District "${districtId}" is blocked by policy "${policy.policyId}"`,
     };
   }
@@ -103,34 +117,69 @@ export function evaluatePolicy(
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `District "${districtId}" is not in the allowed list for policy "${policy.policyId}"`,
     };
   }
 
-  // Per-task limit
-  if (amountUsdc > policy.maxSpendPerTaskUsdc) {
+  // Per-task limit (integer minor units when provided, else float)
+  if (policy.maxSpendPerTaskMinorUnits !== undefined) {
+    const amountMinor = legacyUsdcToMinorUnits(amountUsdc);
+    if (amountMinor > policy.maxSpendPerTaskMinorUnits) {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        status: "BLOCKED",
+        reason: `Amount $${amountUsdc} exceeds per-task limit of $${policy.maxSpendPerTaskUsdc} USDC`,
+      };
+    }
+  } else if (amountUsdc > policy.maxSpendPerTaskUsdc) {
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `Amount $${amountUsdc} exceeds per-task limit of $${policy.maxSpendPerTaskUsdc} USDC`,
     };
   }
 
-  // Daily limit
+  // Daily limit (integer minor units when provided, else float)
   const currentDailySpend = getDailySpend(agentId);
-  if (currentDailySpend + amountUsdc > policy.maxSpendPerDayUsdc) {
+  if (policy.maxSpendPerDayMinorUnits !== undefined) {
+    const amountMinor = legacyUsdcToMinorUnits(amountUsdc);
+    const currentMinor = legacyUsdcToMinorUnits(currentDailySpend);
+    if (currentMinor + amountMinor > policy.maxSpendPerDayMinorUnits) {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        status: "BLOCKED",
+        reason: `Daily limit exceeded. Current: $${currentDailySpend}, requested: $${amountUsdc}, limit: $${policy.maxSpendPerDayUsdc}`,
+      };
+    }
+  } else if (currentDailySpend + amountUsdc > policy.maxSpendPerDayUsdc) {
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `Daily limit exceeded. Current: $${currentDailySpend}, requested: $${amountUsdc}, limit: $${policy.maxSpendPerDayUsdc}`,
     };
   }
 
-  // Approval threshold
-  if (amountUsdc >= policy.approvalThresholdUsdc) {
+  // Approval threshold (integer minor units when provided, else float)
+  if (policy.approvalThresholdMinorUnits !== undefined) {
+    const amountMinor = legacyUsdcToMinorUnits(amountUsdc);
+    if (amountMinor >= policy.approvalThresholdMinorUnits) {
+      return {
+        allowed: true,
+        requiresApproval: true,
+        status: "PENDING",
+        reason: `Amount $${amountUsdc} meets or exceeds approval threshold of $${policy.approvalThresholdUsdc}. Human approval required.`,
+      };
+    }
+  } else if (amountUsdc >= policy.approvalThresholdUsdc) {
     return {
       allowed: true,
       requiresApproval: true,
+      status: "PENDING",
       reason: `Amount $${amountUsdc} meets or exceeds approval threshold of $${policy.approvalThresholdUsdc}. Human approval required.`,
     };
   }
@@ -139,6 +188,7 @@ export function evaluatePolicy(
   return {
     allowed: true,
     requiresApproval: false,
+    status: "PENDING",
     reason: `Policy "${policy.policyId}" approved $${amountUsdc} USDC for agent "${agentId}" in district "${districtId}"`,
   };
 }
@@ -160,8 +210,8 @@ export function recordSettlement(agentId: string, amountUsdc: UsdcAmount): void 
 export const DEFAULT_DEV_POLICY: WalletGuardPolicy = {
   policyId: "dev-default",
   agentId: "*",
-  maxSpendPerTaskUsdc: 0.10,
-  maxSpendPerDayUsdc: 1.00,
+  maxSpendPerTaskUsdc: 0.1,
+  maxSpendPerDayUsdc: 1.0,
   approvalThresholdUsdc: 0.05,
   allowedDistricts: ["*"],
   blockedDistricts: ["dark-alley"],
