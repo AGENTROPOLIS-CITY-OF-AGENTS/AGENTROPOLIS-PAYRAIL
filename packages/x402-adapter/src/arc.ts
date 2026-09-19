@@ -9,7 +9,7 @@ import {
 import {
   SettlementExecutionBlockedError,
   type SimulatedSettlement,
-} from "./index";
+} from "./shared";
 
 export interface ArcSettlementRequest {
   receiptId: string;
@@ -70,11 +70,6 @@ export async function executeSettlementOnArc(
   );
 }
 
-/**
- * Compatibility dispatcher:
- * - Arc testnet is unmistakably simulated.
- * - Arc mainnet attempts the live path and therefore fails closed.
- */
 export async function settleOnArc(
   request: ArcSettlementRequest,
 ): Promise<ArcSimulatedSettlement | ExecutedSettlement> {
