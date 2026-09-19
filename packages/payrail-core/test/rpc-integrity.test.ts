@@ -75,3 +75,20 @@ test("helpers behave correctly", () => {
   assert.ok(isHostAllowed("rpc.mainnet.arc.io", ["rpc.mainnet.arc.io"]));
   assert.ok(!isHostAllowed("evil.io", ["rpc.mainnet.arc.io"]));
 });
+
+test("verifyRpcIntegrity fails closed when allowlist is missing or empty", () => {
+  const missing = verifyRpcIntegrity({
+    url: "https://rpc.mainnet.arc.io",
+    expectedChainId: 5042,
+  });
+  assert.equal(missing.pass, false);
+  assert.ok(missing.problems.some((p) => p.includes("allowlist")));
+
+  const empty = verifyRpcIntegrity({
+    url: "https://rpc.mainnet.arc.io",
+    expectedChainId: 5042,
+    allowedHosts: [],
+  });
+  assert.equal(empty.pass, false);
+  assert.ok(empty.problems.some((p) => p.includes("allowlist")));
+});
