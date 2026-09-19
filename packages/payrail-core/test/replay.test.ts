@@ -45,3 +45,15 @@ test("clear resets the guard", () => {
   assert.equal(guard.size, 0);
   assert.equal(guard.isReplay("key-1"), false);
 });
+
+test("reservation prevents concurrent callers from claiming the same key", () => {
+  const guard = new ReplayGuard();
+  assert.equal(guard.tryReserve("key-race"), true);
+  assert.equal(guard.tryReserve("key-race"), false);
+  assert.equal(guard.isReplay("key-race"), true);
+  assert.equal(guard.reservedSize, 1);
+
+  guard.completeReservation("key-race", simulatedOutcome("done"));
+  assert.equal(guard.reservedSize, 0);
+  assert.equal(guard.size, 1);
+});
