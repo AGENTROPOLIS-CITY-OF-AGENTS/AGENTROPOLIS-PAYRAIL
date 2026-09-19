@@ -5,6 +5,7 @@ import { settle, replayGuard, type SettlementRequest } from "../src/index.js";
 import { settleOnArc, arcReplayGuard } from "../src/arc.js";
 import {
   parseUsdc,
+  usdcMinorUnitString,
   type SignedIntent,
 } from "@agentropolis/payrail-core";
 
@@ -17,7 +18,7 @@ function baseRequest(overrides: Partial<SettlementRequest> = {}): SettlementRequ
     agentId: "agent-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     taskId: "task-1",
     idempotencyKey: "idem-1",
     ...overrides,
@@ -84,7 +85,7 @@ test("Arc testnet settleOnArc returns SIMULATED with no txHash", async () => {
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-testnet",
     idempotencyKey: "idem-arc-1",
     signedIntent: validArcIntent(),
@@ -102,7 +103,7 @@ test("Arc mainnet settleOnArc is BLOCKED (live disabled) even with approval refs
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-mainnet",
     idempotencyKey: "idem-arc-main",
     signedIntent: validArcIntent("arc-mainnet"),
@@ -123,7 +124,7 @@ test("Arc mainnet settleOnArc is BLOCKED when approval refs are missing", async 
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-mainnet",
     idempotencyKey: "idem-arc-main2",
     signedIntent: validArcIntent("arc-mainnet"),
@@ -142,7 +143,7 @@ test("Arc settleOnArc refuses a signed intent with a mismatched recipient", asyn
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-testnet",
     idempotencyKey: "idem-arc-mismatch",
     signedIntent: intent,
@@ -159,7 +160,7 @@ test("Arc settleOnArc refuses a replayed idempotency key", async () => {
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-testnet",
     idempotencyKey: "idem-arc-replay",
     signedIntent: validArcIntent(),
@@ -170,11 +171,32 @@ test("Arc settleOnArc refuses a replayed idempotency key", async () => {
     taskId: "task-1",
     districtId: "harbor",
     toAddress: "0xRecipient0000000000000000000000000000000001",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     rail: "arc-testnet",
     idempotencyKey: "idem-arc-replay",
     signedIntent: validArcIntent(),
   });
   assert.equal(second.outcome.status, "BLOCKED");
   assert.equal(second.outcome.reason, "duplicate-idempotency-key");
+});
+
+
+test("Arc settleOnArc refuses signed intent amount mismatch", async () => {
+  arcReplayGuard.clear();
+  const intent = validArcIntent();
+  intent.bindings.amount = parseUsdc("0.06");
+  intent.bindings.quote.amountMinorUnits = 60000n;
+  const result = await settleOnArc({
+    receiptId: "rcpt-arc-amount-mismatch",
+    agentId: "agent-1",
+    taskId: "task-1",
+    districtId: "harbor",
+    toAddress: "0xRecipient0000000000000000000000000000000001",
+    amountMinorUnits: usdcMinorUnitString("50000"),
+    rail: "arc-testnet",
+    idempotencyKey: "idem-arc-amount-mismatch",
+    signedIntent: intent,
+  });
+  assert.equal(result.outcome.status, "BLOCKED");
+  assert.equal(result.outcome.reason, "signed-intent-binding-mismatch");
 });
