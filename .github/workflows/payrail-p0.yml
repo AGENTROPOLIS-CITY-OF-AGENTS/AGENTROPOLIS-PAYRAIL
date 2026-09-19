@@ -1,0 +1,57 @@
+name: PAYRAIL P0 Verification
+
+on:
+  pull_request:
+    paths:
+      - "packages/payrail-core/**"
+      - "packages/x402-adapter/**"
+      - "packages/wallet-guard/**"
+      - "packages/pricing-rules/**"
+      - "packages/receipt-engine/**"
+      - "apps/gateway-api/**"
+      - "recipes/whale-watcher-54/**"
+      - ".github/workflows/payrail-p0.yml"
+  push:
+    branches:
+      - "feat/arc-settlement-rail"
+    paths:
+      - "packages/payrail-core/**"
+      - "packages/x402-adapter/**"
+      - "packages/wallet-guard/**"
+      - "packages/pricing-rules/**"
+      - "packages/receipt-engine/**"
+      - "apps/gateway-api/**"
+      - "recipes/whale-watcher-54/**"
+      - ".github/workflows/payrail-p0.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  p0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Float-money grep gate
+        shell: bash
+        run: |
+          if grep -RInE 'UsdcAmount[[:space:]]*=[[:space:]]*number|amountUsdc[?]?:[[:space:]]*number|approvalAmountUsdc[?]?:[[:space:]]*number' packages/payrail-core/src packages/x402-adapter/src; then
+            echo "Floating-point money type found in core settlement path"
+            exit 1
+          fi
