@@ -1,27 +1,26 @@
 # payrail-core
 
-> Shared types, utilities, and constants for AGENTROPOLIS-PAYRAIL
+> Shared types, utilities, and constants for AGENTROPOLIS-PAYRAIL.
 
-## What's in here
+## Money law
 
-| Export | Description |
-|--------|-------------|
-| `PAYRAIL_VERSION` | Semver string |
-| `AgentId`, `DistrictId`, `TaskId`, `ReceiptId` | Branded string types |
-| `PaymentRequest` | Input shape for a payment |
-| `PaymentResult` / `PaymentStatus` | Output shape |
-| `DISTRICTS` | Known district constants |
-| `formatTimestamp(date)` | ISO 8601 formatter |
-| `generateId(prefix)` | Prefixed ID generator |
-| `roundUsdc(amount)` | 6-decimal USDC rounding |
+All settlement money is integer-safe.
 
-## Usage
+- ERC-20 USDC uses 6-decimal minor units.
+- Arc native USDC uses 18-decimal minor units.
+- JSON/API boundaries use canonical unsigned integer strings because JSON cannot encode bigint.
+- Floating-point money is not accepted by the payment domain.
+
+Example:
 
 ```ts
-import { PaymentRequest, DISTRICTS, formatTimestamp } from "@agentropolis/payrail-core";
+import {
+  usdcMinorUnitString,
+  formatUsdcMinorUnitString,
+} from "@agentropolis/payrail-core";
+
+const amount = usdcMinorUnitString("50000"); // 0.05 USDC
+console.log(formatUsdcMinorUnitString(amount)); // "0.050000"
 ```
 
-## TODO
-
-- Phase 1: Replace `generateId` with a proper UUID library
-- Phase 1: Add Zod schemas for runtime validation of `PaymentRequest`
+The 6-decimal ERC-20 and 18-decimal Arc-native representations are distinct and require explicit conversion.
