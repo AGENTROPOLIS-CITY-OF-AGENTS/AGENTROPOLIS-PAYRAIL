@@ -1,10 +1,13 @@
 import type {
   EvmAddress,
   SettlementRailSlug,
-  UsdcAmount,
+  UsdcMinorUnitString,
 } from "@agentropolis/payrail-core";
 import {
   EVM_CHAINS,
+  formatUsdcMinorUnitString,
+  usdcMinorUnitBigInt,
+  usdcMinorUnitStringToMoney,
   ReplayGuard,
   blockedOutcome,
   redactSecrets,
@@ -21,7 +24,7 @@ export interface ArcSettlementRequest {
   taskId: string;
   districtId: string;
   toAddress: EvmAddress;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   rail: Extract<SettlementRailSlug, "arc-testnet" | "arc-mainnet">;
   /** Unique idempotency key for replay protection. */
   idempotencyKey: string;
@@ -91,9 +94,19 @@ export async function settleOnArc(
     }
     const mismatches = verifySignedIntentBinding(request.signedIntent, {
       actor: request.agentId,
+      amount: usdcMinorUnitStringToMoney(request.amountMinorUnits),
+      asset: "USDC",
       recipient: request.toAddress,
       chain: request.rail,
     });
+    if (
+      request.signedIntent.bindings.amount.kind !== "erc20" ||
+      request.signedIntent.bindings.amount.decimals !== 6 ||
+      request.signedIntent.bindings.amount.minorUnits !==
+        usdcMinorUnitBigInt(request.amountMinorUnits)
+    ) {
+      mismatches.push("amount");
+    }
     if (mismatches.length > 0) {
       return {
         outcome: blockedOutcome(
@@ -111,7 +124,7 @@ export async function settleOnArc(
     const chain = EVM_CHAINS.ARC_TESTNET;
     const outcome = simulatedOutcome(
       redactSecrets(
-        `[SIMULATED] Arc Testnet settlement intent for $${request.amountUsdc} USDC ` +
+        `[SIMULATED] Arc Testnet settlement intent for ${formatUsdcMinorUnitString(request.amountMinorUnits)} USDC ` +
           `to ${request.toAddress}. External signing is not enabled.`,
       ),
       `sim-${request.idempotencyKey}`,
