@@ -137,6 +137,21 @@ test("missing or malformed bindings are returned as validation problems", () => 
   assert.deepEqual(validateSignedIntentBindings(malformed), ["bindings object is required"]);
 });
 
+test("null bindings are returned as a validation problem, not a throw", () => {
+  const nullBindings = { version: 1, intentId: "bad-null", bindings: null } as unknown as SignedIntent;
+  const problems = validateSignedIntentBindings(nullBindings);
+  assert.deepEqual(problems, ["bindings object is required"]);
+  assert.equal(isSignedIntentValid(nullBindings), false);
+});
+
+test("primitive bindings (string / number) are returned as validation problems", () => {
+  const stringBindings = { version: 1, intentId: "bad-str", bindings: "not-an-object" } as unknown as SignedIntent;
+  assert.deepEqual(validateSignedIntentBindings(stringBindings), ["bindings object is required"]);
+
+  const numberBindings = { version: 1, intentId: "bad-num", bindings: 42 } as unknown as SignedIntent;
+  assert.deepEqual(validateSignedIntentBindings(numberBindings), ["bindings object is required"]);
+});
+
 test("expired and malformed quote expirations are rejected", () => {
   const expired = validIntent({
     quote: {
