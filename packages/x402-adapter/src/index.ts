@@ -58,8 +58,9 @@ export const replayGuard = new ReplayGuard();
  * Returns a SettlementOutcome. A SIMULATED outcome never carries a txHash.
  */
 export async function settle(request: SettlementRequest): Promise<SettlementOutcome> {
-  // Replay protection: refuse a duplicate idempotency key.
-  if (replayGuard.isReplay(request.idempotencyKey)) {
+  // Atomically reserve before the first asynchronous boundary so concurrent
+  // retries cannot both proceed.
+  if (!replayGuard.tryReserve(request.idempotencyKey)) {
     return {
       status: "BLOCKED",
       message: "Replay detected: idempotency key already used.",
@@ -67,23 +68,26 @@ export async function settle(request: SettlementRequest): Promise<SettlementOutc
     };
   }
 
-  console.warn(
-    "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result.",
-  );
+  try {
+    console.warn(
+      "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result.",
+    );
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-  const outcome = simulatedOutcome(
-    redactSecrets(
-      `[SIMULATED] Settlement of ${formatUsdcMinorUnitString(request.amountMinorUnits)} USDC to ${request.toAddress} — not yet real.`,
-    ),
-    `sim-${request.idempotencyKey}`,
-  );
+    const outcome = simulatedOutcome(
+      redactSecrets(
+        `[SIMULATED] Settlement of ${formatUsdcMinorUnitString(request.amountMinorUnits)} USDC to ${request.toAddress} — not yet real.`,
+      ),
+      `sim-${request.idempotencyKey}`,
+    );
 
-  // Record the outcome for idempotent replay.
-  replayGuard.recordIfAbsent(request.idempotencyKey, outcome);
-
-  return outcome;
+    replayGuard.completeReservation(request.idempotencyKey, outcome);
+    return outcome;
+  } catch (error) {
+    replayGuard.releaseReservation(request.idempotencyKey);
+    throw error;
+  }
 }
 
 /**
