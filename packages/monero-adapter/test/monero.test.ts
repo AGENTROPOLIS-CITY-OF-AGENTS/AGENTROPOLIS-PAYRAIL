@@ -34,14 +34,6 @@ test("denied privacy decision returns BLOCKED", async () => {
   assert.equal(result.outcome.reason, "privacy-policy-denied");
 });
 
-test("approval-required privacy decision returns FAILED", async () => {
-  const result = await simulateMoneroSettlement(
-    baseRequest({ privacyDecision: "approval-required" }),
-  );
-  assert.equal(result.outcome.status, "FAILED");
-  assert.equal(result.outcome.reason, "approval-required");
-});
-
 test("secret material in the request is rejected", async () => {
   const withSecret = {
     ...baseRequest(),
@@ -54,4 +46,12 @@ test("non-dry-run is rejected", async () => {
   await assert.rejects(
     simulateMoneroSettlement(baseRequest({ dryRun: false } as never)),
   );
+});
+
+test("approval-required is a policy BLOCKED state, not an execution failure", async () => {
+  const result = await simulateMoneroSettlement(
+    baseRequest({ privacyDecision: "approval-required" }),
+  );
+  assert.equal(result.outcome.status, "BLOCKED");
+  assert.equal(result.outcome.reason, "approval-required");
 });
