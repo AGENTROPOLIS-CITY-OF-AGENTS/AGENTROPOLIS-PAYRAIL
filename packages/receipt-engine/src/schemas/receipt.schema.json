@@ -24,7 +24,7 @@
     },
     "schemaVersion": {
       "type": "string",
-      "const": "1.0.0",
+      "const": "2.0.0",
       "description": "Schema version for forward compatibility"
     },
     "taskId": {
@@ -118,5 +118,82 @@
       "pattern": "^(0|[1-9][0-9]*)$",
       "description": "Canonical 6-decimal ERC-20 USDC minor units encoded as an unsigned integer string"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SETTLED"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "settlement"
+        ],
+        "properties": {
+          "settlement": {
+            "type": "object",
+            "required": [
+              "status",
+              "txHash",
+              "settledAt"
+            ],
+            "properties": {
+              "status": {
+                "const": "SETTLED"
+              },
+              "txHash": {
+                "type": "string",
+                "minLength": 1
+              },
+              "settledAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "SIMULATED",
+              "BLOCKED",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "settlement": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "not": {
+                  "required": [
+                    "txHash"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
 }
