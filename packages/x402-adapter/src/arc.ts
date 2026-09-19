@@ -98,6 +98,7 @@ export async function settleOnArc(
       asset: "USDC",
       recipient: request.toAddress,
       chain: request.rail,
+      provider: "arc",
     });
     if (
       request.signedIntent.bindings.amount.kind !== "erc20" ||
