@@ -1,9 +1,15 @@
-import type {
-  EvmAddress,
-  SettlementRailSlug,
-  UsdcAmount,
+import {
+  EVM_CHAINS,
+  formatUsdc,
+  type EvmAddress,
+  type ExecutedSettlement,
+  type SettlementRailSlug,
+  type UsdcAmount,
 } from "@agentropolis/payrail-core";
-import { EVM_CHAINS } from "@agentropolis/payrail-core";
+import {
+  SettlementExecutionBlockedError,
+  type SimulatedSettlement,
+} from "./index";
 
 export interface ArcSettlementRequest {
   receiptId: string;
@@ -19,70 +25,61 @@ export interface ArcSettlementRequest {
   aegisDecisionRef?: string;
 }
 
-export interface ArcSettlementResult {
-  success: boolean;
-  simulatedOnly: boolean;
+export type ArcSimulatedSettlement = SimulatedSettlement & {
   rail: ArcSettlementRequest["rail"];
-  chainId: number | null;
-  txHash: string | null;
-  receiptId: string;
-  message: string;
+};
+
+export async function simulateSettlementOnArc(
+  request: ArcSettlementRequest,
+): Promise<ArcSimulatedSettlement> {
+  const chain =
+    request.rail === "arc-testnet"
+      ? EVM_CHAINS.ARC_TESTNET
+      : EVM_CHAINS.ARC_MAINNET;
+
+  return {
+    kind: "simulated",
+    reason: "Arc simulation proves control flow only; it is not settlement evidence.",
+    receiptId: request.receiptId,
+    rail: request.rail,
+    chainId: chain.chainId,
+    executionMode: "simulated",
+    message:
+      `[SIMULATED] Arc settlement intent for $${formatUsdc(request.amountUsdc)} USDC ` +
+      `to ${request.toAddress}. External signing is not enabled.`,
+  };
+}
+
+export async function executeSettlementOnArc(
+  request: ArcSettlementRequest,
+): Promise<ExecutedSettlement> {
+  if (!request.approvalRef || !request.executionEnvelopeRef || !request.aegisDecisionRef) {
+    throw new SettlementExecutionBlockedError(
+      "Arc execution blocked: approval, Execution Envelope, and AEGIS decision references are required.",
+    );
+  }
+
+  if (!request.signedIntent) {
+    throw new SettlementExecutionBlockedError(
+      "Arc execution blocked: signedIntent is required for a live lane.",
+    );
+  }
+
+  throw new SettlementExecutionBlockedError(
+    "Arc live settlement remains disabled until signed-intent validation/binding, external signer, replay/idempotency, finality verification, and operator gates are implemented and approved.",
+  );
 }
 
 /**
- * Guarded Arc adapter.
- *
- * Invariants:
- * - agents never provide private keys or mnemonics;
- * - live settlement requires an external signer and explicit approval refs;
- * - Arc testnet and mainnet metadata are compiled from current official references;
- * - metadata presence does not enable live settlement;
- * - this adapter cannot bypass FISCALITH / AEGIS / 54T / Execution Envelope gates.
+ * Compatibility dispatcher:
+ * - Arc testnet is unmistakably simulated.
+ * - Arc mainnet attempts the live path and therefore fails closed.
  */
 export async function settleOnArc(
   request: ArcSettlementRequest,
-): Promise<ArcSettlementResult> {
+): Promise<ArcSimulatedSettlement | ExecutedSettlement> {
   if (request.rail === "arc-testnet") {
-    const chain = EVM_CHAINS.ARC_TESTNET;
-
-    return {
-      success: true,
-      simulatedOnly: true,
-      rail: request.rail,
-      chainId: chain.chainId,
-      txHash: null,
-      receiptId: request.receiptId,
-      message:
-        `[SIMULATED] Arc Testnet settlement intent for $${request.amountUsdc} USDC ` +
-        `to ${request.toAddress}. External signing is not enabled.`,
-    };
+    return simulateSettlementOnArc(request);
   }
-
-  const chain = EVM_CHAINS.ARC_MAINNET;
-
-  // Mainnet metadata is known, but live execution remains disabled until the
-  // external signer, 54T trust boundary, replay/idempotency and approval gates exist.
-  if (!request.approvalRef || !request.executionEnvelopeRef || !request.aegisDecisionRef) {
-    return {
-      success: false,
-      simulatedOnly: true,
-      rail: request.rail,
-      chainId: chain.chainId,
-      txHash: null,
-      receiptId: request.receiptId,
-      message:
-        "Arc mainnet blocked: approval, Execution Envelope, and AEGIS decision references are required.",
-    };
-  }
-
-  return {
-    success: false,
-    simulatedOnly: true,
-    rail: request.rail,
-    chainId: chain.chainId,
-    txHash: null,
-    receiptId: request.receiptId,
-    message:
-      "Arc mainnet metadata is verified, but live settlement remains disabled until the external signer, 54T integrity, replay/idempotency and operator gates are implemented and approved.",
-  };
+  return executeSettlementOnArc(request);
 }
