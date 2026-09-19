@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
-import { PAYRAIL_VERSION, formatTimestamp } from "@agentropolis/payrail-core";
+import { PAYRAIL_VERSION, formatTimestamp, usdcMinorUnitString } from "@agentropolis/payrail-core";
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -26,32 +26,54 @@ app.get("/health", (_req: Request, res: Response) => {
 // TODO: wire real x402 settlement here (Phase 2) — NO raw keys accepted here
 // ---------------------------------------------------------------------------
 app.post("/pay", (req: Request, res: Response) => {
-  const { agentId, districtId, taskId, amountUsdc, dryRun = true } = req.body as {
+  const { agentId, districtId, taskId, amountMinorUnits, dryRun = true } = req.body as {
     agentId?: string;
     districtId?: string;
     taskId?: string;
-    amountUsdc?: number;
+    amountMinorUnits?: string;
     dryRun?: boolean;
   };
 
-  if (!agentId || !districtId || !taskId || amountUsdc === undefined) {
+  if (!agentId || !districtId || !taskId || amountMinorUnits === undefined) {
     res.status(400).json({
-      error: "Missing required fields: agentId, districtId, taskId, amountUsdc",
+      error: "Missing required fields: agentId, districtId, taskId, amountMinorUnits",
     });
     return;
   }
 
-  // Placeholder response — real policy evaluation is Phase 1
+  let canonicalAmountMinorUnits: string;
+  try {
+    canonicalAmountMinorUnits = usdcMinorUnitString(amountMinorUnits);
+  } catch {
+    res.status(400).json({
+      error: "amountMinorUnits must be a canonical non-negative integer string",
+    });
+    return;
+  }
+
+  if (dryRun !== true) {
+    res.status(409).json({
+      status: "BLOCKED",
+      reason: "live-settlement-disabled",
+      message: "Real settlement is not enabled. Use dryRun=true until the execution corridor is implemented and approved.",
+      taskId,
+      agentId,
+      districtId,
+      amountMinorUnits: canonicalAmountMinorUnits,
+      receiptId: null,
+      timestamp: formatTimestamp(new Date()),
+    });
+    return;
+  }
+
   res.status(202).json({
-    status: dryRun ? "dry-run-accepted" : "pending",
-    message: dryRun
-      ? "Dry-run mode: no funds moved. Policy evaluation pending (Phase 1)."
-      : "Real settlement not yet implemented. Enable dry-run mode.",
+    status: "SIMULATED",
+    message: "Dry-run mode: no funds moved. Policy evaluation pending (Phase 1).",
     taskId,
     agentId,
     districtId,
-    amountUsdc,
-    receiptId: null, // TODO: receipt-engine.createReceipt(...)
+    amountMinorUnits: canonicalAmountMinorUnits,
+    receiptId: null,
     timestamp: formatTimestamp(new Date()),
   });
 });
@@ -68,7 +90,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`[gateway-api] AGENTROPOLIS-PAYRAIL gateway running on port ${PORT}`);
-  console.log(`[gateway-api] Dry-run mode ENABLED by default. No agent gets raw wallet power.`);
+  console.log("[gateway-api] Dry-run mode ENABLED by default. No agent gets raw wallet power.");
 });
 
 export default app;

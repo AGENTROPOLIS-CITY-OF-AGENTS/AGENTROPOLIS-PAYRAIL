@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "test": "tsc -p test/tsconfig.json && node --test test/dist-test/test/*.test.js",
+    "clean": "rm -rf dist dist-test"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

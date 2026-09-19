@@ -1,65 +1,62 @@
-// ---------------------------------------------------------------------------
 // AGENTROPOLIS-PAYRAIL — pricing-rules
-// Looks up district pricing rules for task types.
-// ---------------------------------------------------------------------------
+// Integer-only USDC pricing. No floating-point money.
 
-import type { DistrictId, UsdcAmount } from "@agentropolis/payrail-core";
-
-// ---------------------------------------------------------------------------
-// Pricing rule types
-// ---------------------------------------------------------------------------
+import type {
+  DistrictId,
+  UsdcMinorUnitString,
+} from "@agentropolis/payrail-core";
+import {
+  usdcMinorUnitBigInt,
+  usdcMinorUnitString,
+} from "@agentropolis/payrail-core";
 
 export interface PricingRule {
   ruleId: string;
   districtId: DistrictId | "*";
   taskType: string;
-  basePriceUsdc: UsdcAmount;
+  basePriceMinorUnits: UsdcMinorUnitString;
   description: string;
-  multiplier: number;
+  /** Integer basis points. 10_000 = 1.0x. */
+  multiplierBps: number;
   notes?: string;
   active: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Built-in rules (mirrors examples/base-pricing.json)
-// TODO: Phase 1 — load from JSON config or DB, not hardcoded
-// ---------------------------------------------------------------------------
 
 const BASE_RULES: PricingRule[] = [
   {
     ruleId: "downtown-osint-lookup",
     districtId: "downtown" as DistrictId,
     taskType: "osint-lookup",
-    basePriceUsdc: 0.005,
+    basePriceMinorUnits: usdcMinorUnitString("5000"),
     description: "Standard OSINT data lookup in downtown district",
-    multiplier: 1.0,
+    multiplierBps: 10_000,
     active: true,
   },
   {
     ruleId: "harbor-whale-alert",
     districtId: "harbor" as DistrictId,
     taskType: "whale-alert",
-    basePriceUsdc: 0.01,
+    basePriceMinorUnits: usdcMinorUnitString("10000"),
     description: "Wallet activity monitoring and threshold alert in harbor district",
-    multiplier: 1.0,
+    multiplierBps: 10_000,
     active: true,
   },
   {
     ruleId: "tech-row-npc-prompt",
     districtId: "tech-row" as DistrictId,
     taskType: "npc-prompt",
-    basePriceUsdc: 0.02,
+    basePriceMinorUnits: usdcMinorUnitString("20000"),
     description: "NPC task execution via prompt in tech-row district",
-    multiplier: 1.0,
+    multiplierBps: 10_000,
     active: true,
   },
   {
     ruleId: "terra54-property-check",
     districtId: "terra54" as DistrictId,
     taskType: "property-lookup",
-    basePriceUsdc: 0.015,
+    basePriceMinorUnits: usdcMinorUnitString("15000"),
     description: "Property data lookup in Terra54 district",
-    multiplier: 1.2,
+    multiplierBps: 12_000,
     notes: "20% premium for Terra54 district data access",
     active: true,
   },
@@ -67,52 +64,46 @@ const BASE_RULES: PricingRule[] = [
     ruleId: "archives-data-retrieval",
     districtId: "archives" as DistrictId,
     taskType: "data-retrieval",
-    basePriceUsdc: 0.003,
+    basePriceMinorUnits: usdcMinorUnitString("3000"),
     description: "Historical data retrieval from the Archives district",
-    multiplier: 0.8,
+    multiplierBps: 8_000,
     notes: "20% discount — archives are open access by default",
     active: true,
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Lookup
-// ---------------------------------------------------------------------------
-
-/**
- * Look up the effective price (basePriceUsdc × multiplier) for a task in a district.
- * Returns undefined if no rule matches.
- *
- * Priority: exact district match > wildcard district match
- */
 export function lookupPrice(
   districtId: DistrictId,
-  taskType: string
-): { rule: PricingRule; effectivePriceUsdc: UsdcAmount } | undefined {
+  taskType: string,
+): { rule: PricingRule; effectivePriceMinorUnits: UsdcMinorUnitString } | undefined {
   const active = BASE_RULES.filter((r) => r.active);
-
-  // Exact district match first
   const exact = active.find(
-    (r) => r.districtId === districtId && r.taskType === taskType
+    (r) => r.districtId === districtId && r.taskType === taskType,
   );
-
-  // Wildcard fallback
   const wildcard = active.find(
-    (r) => r.districtId === "*" && r.taskType === taskType
+    (r) => r.districtId === "*" && r.taskType === taskType,
   );
-
   const rule = exact ?? wildcard;
   if (!rule) return undefined;
 
+  if (!Number.isInteger(rule.multiplierBps) || rule.multiplierBps < 0) {
+    throw new Error("Pricing multiplierBps must be a non-negative integer");
+  }
+
+  const base = usdcMinorUnitBigInt(rule.basePriceMinorUnits);
+  const numerator = base * BigInt(rule.multiplierBps);
+  if (numerator % 10_000n !== 0n) {
+    throw new Error(
+      "Pricing rule produces sub-minor-unit precision and cannot settle exactly",
+    );
+  }
+
   return {
     rule,
-    effectivePriceUsdc: Math.round(rule.basePriceUsdc * rule.multiplier * 1_000_000) / 1_000_000,
+    effectivePriceMinorUnits: usdcMinorUnitString(numerator / 10_000n),
   };
 }
 
-/**
- * List all active pricing rules.
- */
 export function listRules(): PricingRule[] {
   return BASE_RULES.filter((r) => r.active);
 }

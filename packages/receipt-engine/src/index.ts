@@ -4,31 +4,39 @@
 //
 // Receipts are immutable records. Once issued, they are never modified.
 // Settled receipts include a tx hash from the x402-adapter (Phase 2).
+//
+// The receipt status uses the canonical SettlementStatus vocabulary
+// (SIMULATED / PENDING / SETTLED / BLOCKED / FAILED). A SIMULATED receipt
+// NEVER carries a txHash.
 // ---------------------------------------------------------------------------
 
 import {
   generateId,
   formatTimestamp,
-  roundUsdc,
   type AgentId,
   type DistrictId,
   type TaskId,
   type ReceiptId,
-  type UsdcAmount,
+  type UsdcMinorUnitString,
+  formatUsdcMinorUnitString,
+  type SettlementStatus,
 } from "@agentropolis/payrail-core";
 
-export const RECEIPT_SCHEMA_VERSION = "1.0.0";
+export const RECEIPT_SCHEMA_VERSION = "2.0.0";
 
 // ---------------------------------------------------------------------------
 // Receipt type
 // ---------------------------------------------------------------------------
 
-export type ReceiptStatus =
-  | "dry-run-accepted"
-  | "pending-approval"
-  | "settled"
-  | "failed"
-  | "cancelled";
+export type ReceiptStatus = SettlementStatus | "CANCELLED";
+
+/** Settlement evidence attached to a receipt. */
+export interface ReceiptSettlement {
+  status: SettlementStatus;
+  /** Present only for PENDING / SETTLED. A SIMULATED receipt never has one. */
+  txHash?: string;
+  settledAt?: string;
+}
 
 export interface AgentTaskReceipt {
   receiptId: ReceiptId;
@@ -38,15 +46,14 @@ export interface AgentTaskReceipt {
   districtId: DistrictId;
   taskType: string;
   description: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   currency: "USDC";
   status: ReceiptStatus;
   dryRun: boolean;
-  /** TODO: Phase 2 — x402-adapter populates this after on-chain settlement */
-  settlementTxHash: string | null;
+  /** Settlement evidence. txHash is absent for SIMULATED / BLOCKED / FAILED. */
+  settlement: ReceiptSettlement | null;
   policyId?: string;
   issuedAt: string;
-  settledAt: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -56,10 +63,11 @@ export interface CreateReceiptInput {
   districtId: DistrictId;
   taskType: string;
   description: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   status: ReceiptStatus;
   dryRun: boolean;
   policyId?: string;
+  settlement?: ReceiptSettlement;
   metadata?: Record<string, unknown>;
 }
 
@@ -72,7 +80,7 @@ const receiptStore = new Map<ReceiptId, AgentTaskReceipt>();
 
 console.warn(
   "[receipt-engine] WARNING: Using in-memory receipt store. All receipts are lost on restart. " +
-    "Replace with persistent storage in Phase 1."
+    "Replace with persistent storage in Phase 1.",
 );
 
 // ---------------------------------------------------------------------------
@@ -83,7 +91,42 @@ console.warn(
  * Create and store a new receipt for an agent task payment.
  * This is the only way to produce a receipt — never construct one manually.
  */
+function assertReceiptConsistency(input: CreateReceiptInput): void {
+  const settlement = input.settlement;
+
+  if (input.status === "CANCELLED") {
+    if (settlement) throw new Error("CANCELLED receipt must not include settlement evidence");
+    return;
+  }
+
+  if (!settlement) {
+    if (input.status === "SETTLED") {
+      throw new Error("SETTLED receipt requires settlement evidence");
+    }
+    return;
+  }
+
+  if (settlement.status !== input.status) {
+    throw new Error(`receipt status ${input.status} does not match settlement status ${settlement.status}`);
+  }
+
+  if (input.status === "SETTLED") {
+    if (!settlement.txHash || settlement.txHash.trim().length === 0) {
+      throw new Error("SETTLED receipt requires a non-empty txHash");
+    }
+    if (!settlement.settledAt || Number.isNaN(Date.parse(settlement.settledAt))) {
+      throw new Error("SETTLED receipt requires a valid settledAt timestamp");
+    }
+  }
+
+  if (["SIMULATED", "BLOCKED", "FAILED"].includes(input.status) && settlement.txHash) {
+    throw new Error(`${input.status} receipt must not include txHash`);
+  }
+}
+
 export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
+  assertReceiptConsistency(input);
+
   const receiptId = generateId("rcpt") as ReceiptId;
   const now = formatTimestamp(new Date());
 
@@ -95,14 +138,13 @@ export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
     districtId: input.districtId,
     taskType: input.taskType,
     description: input.description,
-    amountUsdc: roundUsdc(input.amountUsdc),
+    amountMinorUnits: input.amountMinorUnits,
     currency: "USDC",
     status: input.status,
     dryRun: input.dryRun,
-    settlementTxHash: null,
+    settlement: input.settlement ?? null,
     policyId: input.policyId,
     issuedAt: now,
-    settledAt: null,
     metadata: input.metadata,
   };
 
@@ -122,15 +164,22 @@ export function getReceipt(receiptId: ReceiptId): AgentTaskReceipt | undefined {
  * TODO: Phase 2 — called by x402-adapter after settlement confirmation
  */
 export function markSettled(receiptId: ReceiptId, txHash: string): AgentTaskReceipt {
+  if (!txHash || txHash.trim().length === 0) {
+    throw new Error("txHash must be a non-empty string");
+  }
+
   const receipt = receiptStore.get(receiptId);
   if (!receipt) {
     throw new Error(`Receipt not found: ${receiptId}`);
   }
   const settled: AgentTaskReceipt = {
     ...receipt,
-    status: "settled",
-    settlementTxHash: txHash,
-    settledAt: formatTimestamp(new Date()),
+    status: "SETTLED",
+    settlement: {
+      status: "SETTLED",
+      txHash,
+      settledAt: formatTimestamp(new Date()),
+    },
   };
   receiptStore.set(receiptId, settled);
   return settled;
@@ -149,6 +198,7 @@ export function listReceipts(): AgentTaskReceipt[] {
  */
 export function printReceipt(receipt: AgentTaskReceipt): void {
   const dryTag = receipt.dryRun ? " [DRY-RUN]" : "";
+  const txHash = receipt.settlement?.txHash ?? "—";
   console.log("─────────────────────────────────────────");
   console.log(`AGENTROPOLIS-PAYRAIL RECEIPT${dryTag}`);
   console.log("─────────────────────────────────────────");
@@ -158,10 +208,9 @@ export function printReceipt(receipt: AgentTaskReceipt): void {
   console.log(`District:     ${receipt.districtId}`);
   console.log(`Task Type:    ${receipt.taskType}`);
   console.log(`Description:  ${receipt.description}`);
-  console.log(`Amount:       $${receipt.amountUsdc} ${receipt.currency}`);
+  console.log(`Amount:       ${formatUsdcMinorUnitString(receipt.amountMinorUnits)} ${receipt.currency}`);
   console.log(`Status:       ${receipt.status}`);
-  console.log(`TX Hash:      ${receipt.settlementTxHash ?? "—"}`);
+  console.log(`TX Hash:      ${txHash}`);
   console.log(`Issued At:    ${receipt.issuedAt}`);
-  console.log(`Settled At:   ${receipt.settledAt ?? "—"}`);
   console.log("─────────────────────────────────────────");
 }

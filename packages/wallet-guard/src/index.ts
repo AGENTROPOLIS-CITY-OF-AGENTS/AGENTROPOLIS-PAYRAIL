@@ -1,26 +1,22 @@
-// ---------------------------------------------------------------------------
 // AGENTROPOLIS-PAYRAIL — wallet-guard
-// Policy engine that enforces spend limits and guardrails.
-//
-// "No agent gets raw wallet power."
-//
-// This module NEVER handles private keys, seed phrases, or signing keys.
-// It evaluates policy rules and returns a decision — settlement happens
-// elsewhere (x402-adapter, Phase 2).
-// ---------------------------------------------------------------------------
+// Integer-only policy engine. No floating-point money is accepted anywhere.
 
-import type { PaymentRequest, UsdcAmount } from "@agentropolis/payrail-core";
-
-// ---------------------------------------------------------------------------
-// Policy types
-// ---------------------------------------------------------------------------
+import type {
+  PaymentRequest,
+  UsdcMinorUnitString,
+} from "@agentropolis/payrail-core";
+import {
+  formatUsdcMinorUnitString,
+  usdcMinorUnitBigInt,
+  usdcMinorUnitString,
+} from "@agentropolis/payrail-core";
 
 export interface WalletGuardPolicy {
   policyId: string;
   agentId: string;
-  maxSpendPerTaskUsdc: UsdcAmount;
-  maxSpendPerDayUsdc: UsdcAmount;
-  approvalThresholdUsdc: UsdcAmount;
+  maxSpendPerTaskMinorUnits: UsdcMinorUnitString;
+  maxSpendPerDayMinorUnits: UsdcMinorUnitString;
+  approvalThresholdMinorUnits: UsdcMinorUnitString;
   allowedDistricts: string[];
   blockedDistricts: string[];
   dryRun: boolean;
@@ -28,74 +24,70 @@ export interface WalletGuardPolicy {
 }
 
 export type GuardDecision =
-  | { allowed: true; requiresApproval: false; reason: string }
-  | { allowed: true; requiresApproval: true; reason: string }
-  | { allowed: false; requiresApproval: false; reason: string };
+  | { allowed: true; requiresApproval: false; status: "SIMULATED"; reason: string }
+  | { allowed: true; requiresApproval: false; status: "PENDING"; reason: string }
+  | { allowed: true; requiresApproval: true; status: "PENDING"; reason: string }
+  | { allowed: false; requiresApproval: false; status: "BLOCKED"; reason: string };
 
-// ---------------------------------------------------------------------------
-// Daily spend tracking (in-memory — replace with persistent store in Phase 1)
-// ---------------------------------------------------------------------------
-
-/** TODO: Phase 1 — replace with persistent daily spend tracker (DB/Redis) */
-const dailySpendTracker = new Map<string, { total: UsdcAmount; date: string }>();
+const dailySpendTracker = new Map<string, { totalMinorUnits: bigint; date: string }>();
 
 console.warn(
   "[wallet-guard] WARNING: Using in-memory daily spend tracker. " +
-    "Limits reset on restart — replace with persistent storage in Phase 1 before production use."
+    "Limits reset on restart — replace with persistent storage before production use.",
 );
 
-function getDailySpend(agentId: string): UsdcAmount {
+function getDailySpendMinorUnits(agentId: string): bigint {
   const today = new Date().toISOString().slice(0, 10);
   const entry = dailySpendTracker.get(agentId);
-  if (!entry || entry.date !== today) return 0;
-  return entry.total;
+  if (!entry || entry.date !== today) return 0n;
+  return entry.totalMinorUnits;
 }
 
-function recordDailySpend(agentId: string, amount: UsdcAmount): void {
+function recordDailySpend(agentId: string, amountMinorUnits: bigint): void {
   const today = new Date().toISOString().slice(0, 10);
   const existing = dailySpendTracker.get(agentId);
   if (!existing || existing.date !== today) {
-    dailySpendTracker.set(agentId, { total: amount, date: today });
+    dailySpendTracker.set(agentId, { totalMinorUnits: amountMinorUnits, date: today });
   } else {
-    dailySpendTracker.set(agentId, { total: existing.total + amount, date: today });
+    dailySpendTracker.set(agentId, {
+      totalMinorUnits: existing.totalMinorUnits + amountMinorUnits,
+      date: today,
+    });
   }
 }
 
-// ---------------------------------------------------------------------------
-// Core guard evaluation
-// ---------------------------------------------------------------------------
+function display(value: UsdcMinorUnitString): string {
+  return formatUsdcMinorUnitString(value);
+}
 
-/**
- * Evaluate a payment request against a wallet guard policy.
- * Returns a GuardDecision — never performs actual settlement.
- *
- * TODO: Phase 1 — load policy from a policy store, not passed directly
- */
 export function evaluatePolicy(
   request: PaymentRequest,
-  policy: WalletGuardPolicy
+  policy: WalletGuardPolicy,
 ): GuardDecision {
-  const { amountUsdc, districtId, agentId } = request;
+  const { amountMinorUnits, districtId, agentId } = request;
+  const amount = usdcMinorUnitBigInt(amountMinorUnits);
+  const perTask = usdcMinorUnitBigInt(policy.maxSpendPerTaskMinorUnits);
+  const dailyMax = usdcMinorUnitBigInt(policy.maxSpendPerDayMinorUnits);
+  const approval = usdcMinorUnitBigInt(policy.approvalThresholdMinorUnits);
 
-  // Dry-run: always allowed, no funds move
   if (policy.dryRun) {
     return {
       allowed: true,
       requiresApproval: false,
-      reason: `[DRY-RUN] Policy evaluated. No funds moved. Amount: $${amountUsdc} USDC`,
+      status: "SIMULATED",
+      reason: `[DRY-RUN] Policy evaluated. No funds moved. Amount: $${display(amountMinorUnits)} USDC`,
     };
   }
 
-  // Blocked district check
   if (policy.blockedDistricts.includes(districtId)) {
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `District "${districtId}" is blocked by policy "${policy.policyId}"`,
     };
   }
 
-  // Allowed district check (if not wildcard)
   if (
     !policy.allowedDistricts.includes("*") &&
     !policy.allowedDistricts.includes(districtId)
@@ -103,66 +95,62 @@ export function evaluatePolicy(
     return {
       allowed: false,
       requiresApproval: false,
+      status: "BLOCKED",
       reason: `District "${districtId}" is not in the allowed list for policy "${policy.policyId}"`,
     };
   }
 
-  // Per-task limit
-  if (amountUsdc > policy.maxSpendPerTaskUsdc) {
+  if (amount > perTask) {
     return {
       allowed: false,
       requiresApproval: false,
-      reason: `Amount $${amountUsdc} exceeds per-task limit of $${policy.maxSpendPerTaskUsdc} USDC`,
+      status: "BLOCKED",
+      reason: `Amount $${display(amountMinorUnits)} exceeds per-task limit of $${display(policy.maxSpendPerTaskMinorUnits)} USDC`,
     };
   }
 
-  // Daily limit
-  const currentDailySpend = getDailySpend(agentId);
-  if (currentDailySpend + amountUsdc > policy.maxSpendPerDayUsdc) {
+  const currentDaily = getDailySpendMinorUnits(agentId);
+  if (currentDaily + amount > dailyMax) {
     return {
       allowed: false,
       requiresApproval: false,
-      reason: `Daily limit exceeded. Current: $${currentDailySpend}, requested: $${amountUsdc}, limit: $${policy.maxSpendPerDayUsdc}`,
+      status: "BLOCKED",
+      reason:
+        `Daily limit exceeded. Current: $${formatUsdcMinorUnitString(usdcMinorUnitString(currentDaily))}, ` +
+        `requested: $${display(amountMinorUnits)}, limit: $${display(policy.maxSpendPerDayMinorUnits)}`,
     };
   }
 
-  // Approval threshold
-  if (amountUsdc >= policy.approvalThresholdUsdc) {
+  if (amount >= approval) {
     return {
       allowed: true,
       requiresApproval: true,
-      reason: `Amount $${amountUsdc} meets or exceeds approval threshold of $${policy.approvalThresholdUsdc}. Human approval required.`,
+      status: "PENDING",
+      reason: `Amount $${display(amountMinorUnits)} meets or exceeds approval threshold of $${display(policy.approvalThresholdMinorUnits)}. Human approval required.`,
     };
   }
 
-  // All checks passed
   return {
     allowed: true,
     requiresApproval: false,
-    reason: `Policy "${policy.policyId}" approved $${amountUsdc} USDC for agent "${agentId}" in district "${districtId}"`,
+    status: "PENDING",
+    reason: `Policy "${policy.policyId}" approved $${display(amountMinorUnits)} USDC for agent "${agentId}" in district "${districtId}"`,
   };
 }
 
-/**
- * Record that a payment was settled (updates daily spend tracker).
- * Call this AFTER successful settlement confirmation.
- *
- * TODO: Phase 1 — persist to DB/Redis instead of in-memory map
- */
-export function recordSettlement(agentId: string, amountUsdc: UsdcAmount): void {
-  recordDailySpend(agentId, amountUsdc);
+export function recordSettlement(
+  agentId: string,
+  amountMinorUnits: UsdcMinorUnitString,
+): void {
+  recordDailySpend(agentId, usdcMinorUnitBigInt(amountMinorUnits));
 }
-
-// ---------------------------------------------------------------------------
-// Default development policy (dry-run, very conservative)
-// ---------------------------------------------------------------------------
 
 export const DEFAULT_DEV_POLICY: WalletGuardPolicy = {
   policyId: "dev-default",
   agentId: "*",
-  maxSpendPerTaskUsdc: 0.10,
-  maxSpendPerDayUsdc: 1.00,
-  approvalThresholdUsdc: 0.05,
+  maxSpendPerTaskMinorUnits: usdcMinorUnitString("100000"),
+  maxSpendPerDayMinorUnits: usdcMinorUnitString("1000000"),
+  approvalThresholdMinorUnits: usdcMinorUnitString("50000"),
   allowedDistricts: ["*"],
   blockedDistricts: ["dark-alley"],
   dryRun: true,
