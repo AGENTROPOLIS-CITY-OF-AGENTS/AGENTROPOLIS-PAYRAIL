@@ -1,27 +1,21 @@
 // ---------------------------------------------------------------------------
 // AGENTROPOLIS-PAYRAIL — receipt-engine
-// Creates, validates, and stores auditable task receipts.
-//
-// Receipts are immutable records. Once issued, they are never modified.
-// Settled receipts include a tx hash from the x402-adapter (Phase 2).
+// Exact-money, execution-mode-aware task receipts.
 // ---------------------------------------------------------------------------
 
 import {
-  generateId,
   formatTimestamp,
-  roundUsdc,
+  formatUsdc,
+  generateId,
   type AgentId,
   type DistrictId,
-  type TaskId,
+  type ExecutedSettlement,
   type ReceiptId,
+  type TaskId,
   type UsdcAmount,
 } from "@agentropolis/payrail-core";
 
-export const RECEIPT_SCHEMA_VERSION = "1.0.0";
-
-// ---------------------------------------------------------------------------
-// Receipt type
-// ---------------------------------------------------------------------------
+export const RECEIPT_SCHEMA_VERSION = "1.1.0";
 
 export type ReceiptStatus =
   | "dry-run-accepted"
@@ -38,11 +32,12 @@ export interface AgentTaskReceipt {
   districtId: DistrictId;
   taskType: string;
   description: string;
-  amountUsdc: UsdcAmount;
+  /** Exact decimal string, never a JavaScript floating-point number. */
+  amountUsdc: string;
   currency: "USDC";
   status: ReceiptStatus;
   dryRun: boolean;
-  /** TODO: Phase 2 — x402-adapter populates this after on-chain settlement */
+  executionMode: "simulated" | "live";
   settlementTxHash: string | null;
   policyId?: string;
   issuedAt: string;
@@ -57,32 +52,19 @@ export interface CreateReceiptInput {
   taskType: string;
   description: string;
   amountUsdc: UsdcAmount;
-  status: ReceiptStatus;
+  status: Exclude<ReceiptStatus, "settled">;
   dryRun: boolean;
   policyId?: string;
   metadata?: Record<string, unknown>;
 }
 
-// ---------------------------------------------------------------------------
-// In-memory store (Phase 1: replace with DB)
-// ---------------------------------------------------------------------------
-
-/** TODO: Phase 1 — replace in-memory store with SQLite / Postgres persistence */
 const receiptStore = new Map<ReceiptId, AgentTaskReceipt>();
 
 console.warn(
-  "[receipt-engine] WARNING: Using in-memory receipt store. All receipts are lost on restart. " +
-    "Replace with persistent storage in Phase 1."
+  "[receipt-engine] WARNING: Using in-memory receipt store. " +
+    "Replace with persistent storage before production use.",
 );
 
-// ---------------------------------------------------------------------------
-// Core functions
-// ---------------------------------------------------------------------------
-
-/**
- * Create and store a new receipt for an agent task payment.
- * This is the only way to produce a receipt — never construct one manually.
- */
 export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
   const receiptId = generateId("rcpt") as ReceiptId;
   const now = formatTimestamp(new Date());
@@ -95,10 +77,11 @@ export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
     districtId: input.districtId,
     taskType: input.taskType,
     description: input.description,
-    amountUsdc: roundUsdc(input.amountUsdc),
+    amountUsdc: formatUsdc(input.amountUsdc),
     currency: "USDC",
     status: input.status,
     dryRun: input.dryRun,
+    executionMode: "simulated",
     settlementTxHash: null,
     policyId: input.policyId,
     issuedAt: now,
@@ -110,45 +93,46 @@ export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
   return receipt;
 }
 
-/**
- * Retrieve a receipt by ID.
- */
 export function getReceipt(receiptId: ReceiptId): AgentTaskReceipt | undefined {
   return receiptStore.get(receiptId);
 }
 
 /**
- * Mark a receipt as settled (called after x402 on-chain confirmation).
- * TODO: Phase 2 — called by x402-adapter after settlement confirmation
+ * Only a branded ExecutedSettlement can promote a receipt to settled/live.
+ * Simulated outcomes are not assignable to this parameter at compile time.
  */
-export function markSettled(receiptId: ReceiptId, txHash: string): AgentTaskReceipt {
+export function markSettled(
+  receiptId: ReceiptId,
+  settlement: ExecutedSettlement,
+): AgentTaskReceipt {
   const receipt = receiptStore.get(receiptId);
-  if (!receipt) {
-    throw new Error(`Receipt not found: ${receiptId}`);
+  if (!receipt) throw new Error(`Receipt not found: ${receiptId}`);
+  if (settlement.receiptId !== receiptId) {
+    throw new Error("Settlement receiptId does not match receipt being promoted");
   }
+  if (settlement.executionMode !== "live" || settlement.kind !== "executed") {
+    throw new Error("Only live executed settlements can mark a receipt settled");
+  }
+
   const settled: AgentTaskReceipt = {
     ...receipt,
     status: "settled",
-    settlementTxHash: txHash,
+    dryRun: false,
+    executionMode: "live",
+    settlementTxHash: settlement.txHash,
     settledAt: formatTimestamp(new Date()),
   };
+
   receiptStore.set(receiptId, settled);
   return settled;
 }
 
-/**
- * List all receipts (for audit/dashboard use).
- * TODO: Phase 1 — add filtering by agentId, districtId, date range
- */
 export function listReceipts(): AgentTaskReceipt[] {
   return Array.from(receiptStore.values());
 }
 
-/**
- * Print a receipt to console in a structured, human-readable format.
- */
 export function printReceipt(receipt: AgentTaskReceipt): void {
-  const dryTag = receipt.dryRun ? " [DRY-RUN]" : "";
+  const dryTag = receipt.executionMode === "simulated" ? " [SIMULATED]" : "";
   console.log("─────────────────────────────────────────");
   console.log(`AGENTROPOLIS-PAYRAIL RECEIPT${dryTag}`);
   console.log("─────────────────────────────────────────");
@@ -160,6 +144,7 @@ export function printReceipt(receipt: AgentTaskReceipt): void {
   console.log(`Description:  ${receipt.description}`);
   console.log(`Amount:       $${receipt.amountUsdc} ${receipt.currency}`);
   console.log(`Status:       ${receipt.status}`);
+  console.log(`Mode:         ${receipt.executionMode}`);
   console.log(`TX Hash:      ${receipt.settlementTxHash ?? "—"}`);
   console.log(`Issued At:    ${receipt.issuedAt}`);
   console.log(`Settled At:   ${receipt.settledAt ?? "—"}`);

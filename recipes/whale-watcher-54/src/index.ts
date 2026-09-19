@@ -19,6 +19,8 @@ import {
   DISTRICTS,
   formatTimestamp,
   generateId,
+  formatUsdc,
+  parseUsdc,
   type AgentId,
   type DistrictId,
   type TaskId,
@@ -51,9 +53,9 @@ const TASK_TYPE = "whale-alert";
 const POLICY: WalletGuardPolicy = {
   policyId: "whale-watcher-54-policy",
   agentId: AGENT_ID,
-  maxSpendPerTaskUsdc: 0.05,
-  maxSpendPerDayUsdc: 0.50,
-  approvalThresholdUsdc: 0.04,
+  maxSpendPerTaskUsdc: parseUsdc("0.05"),
+  maxSpendPerDayUsdc: parseUsdc("0.50"),
+  approvalThresholdUsdc: parseUsdc("0.04"),
   allowedDistricts: [DISTRICTS.HARBOR, DISTRICTS.DOWNTOWN],
   blockedDistricts: ["dark-alley"],
   dryRun: true, // Always true for this recipe — no real funds
@@ -186,9 +188,9 @@ async function runWhaleWatcher54(): Promise<void> {
 
   // Look up the pricing rule for this task type
   const priceInfo = lookupPrice(DISTRICT_ID, TASK_TYPE);
-  const taskPriceUsdc = priceInfo?.effectivePriceUsdc ?? 0.01;
+  const taskPriceUsdc = priceInfo?.effectivePriceUsdc ?? parseUsdc("0.01");
   console.log(
-    `[whale-watcher-54] Task fee: $${taskPriceUsdc} USDC per alert (rule: ${priceInfo?.rule.ruleId ?? "default"})\n`
+    `[whale-watcher-54] Task fee: ${formatUsdc(taskPriceUsdc)} USDC per alert (rule: ${priceInfo?.rule.ruleId ?? "default"})\n`
   );
 
   let alertsCreated = 0;
