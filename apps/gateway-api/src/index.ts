@@ -51,19 +51,29 @@ app.post("/pay", (req: Request, res: Response) => {
     return;
   }
 
-  // Placeholder response — real policy evaluation is Phase 1.
-  // Uses the canonical SettlementStatus vocabulary. A SIMULATED result never
-  // carries a txHash.
+  if (dryRun !== true) {
+    res.status(409).json({
+      status: "BLOCKED",
+      reason: "live-settlement-disabled",
+      message: "Real settlement is not enabled. Use dryRun=true until the execution corridor is implemented and approved.",
+      taskId,
+      agentId,
+      districtId,
+      amountMinorUnits: canonicalAmountMinorUnits,
+      receiptId: null,
+      timestamp: formatTimestamp(new Date()),
+    });
+    return;
+  }
+
   res.status(202).json({
-    status: dryRun ? "SIMULATED" : "PENDING",
-    message: dryRun
-      ? "Dry-run mode: no funds moved. Policy evaluation pending (Phase 1)."
-      : "Real settlement not yet implemented. Enable dry-run mode.",
+    status: "SIMULATED",
+    message: "Dry-run mode: no funds moved. Policy evaluation pending (Phase 1).",
     taskId,
     agentId,
     districtId,
     amountMinorUnits: canonicalAmountMinorUnits,
-    receiptId: null, // TODO: receipt-engine.createReceipt(...)
+    receiptId: null,
     timestamp: formatTimestamp(new Date()),
   });
 });
@@ -80,7 +90,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`[gateway-api] AGENTROPOLIS-PAYRAIL gateway running on port ${PORT}`);
-  console.log(`[gateway-api] Dry-run mode ENABLED by default. No agent gets raw wallet power.`);
+  console.log("[gateway-api] Dry-run mode ENABLED by default. No agent gets raw wallet power.");
 });
 
 export default app;
