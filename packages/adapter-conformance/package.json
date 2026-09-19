@@ -1,0 +1,23 @@
+{
+  "name": "@agentropolis/adapter-conformance",
+  "version": "0.1.0",
+  "description": "Conformance contract for PAYRAIL settlement and token-launch adapters selected by Genesis Spawn Chain Oracle.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
