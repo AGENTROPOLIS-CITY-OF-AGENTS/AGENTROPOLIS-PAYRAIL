@@ -15,9 +15,10 @@
 // NEVER carries a txHash.
 // ---------------------------------------------------------------------------
 
-import type { UsdcAmount } from "@agentropolis/payrail-core";
+import type { UsdcMinorUnitString } from "@agentropolis/payrail-core";
 import {
   ReplayGuard,
+  formatUsdcMinorUnitString,
   redactSecrets,
   simulatedOutcome,
   type SettlementOutcome,
@@ -32,7 +33,7 @@ export interface SettlementRequest {
   agentId: string;
   districtId: string;
   toAddress: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   taskId: string;
   /** Unique idempotency key for replay protection. */
   idempotencyKey: string;
@@ -74,7 +75,7 @@ export async function settle(request: SettlementRequest): Promise<SettlementOutc
 
   const outcome = simulatedOutcome(
     redactSecrets(
-      `[SIMULATED] Settlement of $${request.amountUsdc} USDC to ${request.toAddress} — not yet real.`,
+      `[SIMULATED] Settlement of ${formatUsdcMinorUnitString(request.amountMinorUnits)} USDC to ${request.toAddress} — not yet real.`,
     ),
     `sim-${request.idempotencyKey}`,
   );
