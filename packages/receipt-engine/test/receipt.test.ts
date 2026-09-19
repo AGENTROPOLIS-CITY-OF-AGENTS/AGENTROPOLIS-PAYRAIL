@@ -7,6 +7,7 @@ import {
   getReceipt,
   type CreateReceiptInput,
 } from "../src/index.js";
+import { usdcMinorUnitString } from "@agentropolis/payrail-core";
 
 function baseInput(overrides: Partial<CreateReceiptInput> = {}): CreateReceiptInput {
   return {
@@ -15,7 +16,7 @@ function baseInput(overrides: Partial<CreateReceiptInput> = {}): CreateReceiptIn
     districtId: "harbor" as never,
     taskType: "whale-alert",
     description: "test",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     status: "SIMULATED",
     dryRun: true,
     ...overrides,
