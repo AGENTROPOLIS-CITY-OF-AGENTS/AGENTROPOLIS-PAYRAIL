@@ -10,7 +10,7 @@
     "agentId",
     "districtId",
     "taskType",
-    "amountUsdc",
+    "amountMinorUnits",
     "currency",
     "status",
     "dryRun",
@@ -47,11 +47,6 @@
       "type": "string",
       "description": "Human-readable description of the task performed"
     },
-    "amountUsdc": {
-      "type": "number",
-      "minimum": 0,
-      "description": "USDC amount charged for this task (6-decimal ERC-20 USDC)"
-    },
     "currency": {
       "type": "string",
       "const": "USDC",
@@ -59,7 +54,14 @@
     },
     "status": {
       "type": "string",
-      "enum": ["SIMULATED", "PENDING", "SETTLED", "BLOCKED", "FAILED", "CANCELLED"],
+      "enum": [
+        "SIMULATED",
+        "PENDING",
+        "SETTLED",
+        "BLOCKED",
+        "FAILED",
+        "CANCELLED"
+      ],
       "description": "Canonical settlement status of the payment associated with this receipt"
     },
     "dryRun": {
@@ -67,12 +69,21 @@
       "description": "True if this receipt was generated in dry-run mode (no real funds moved)"
     },
     "settlement": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "Settlement evidence. txHash is absent for SIMULATED / BLOCKED / FAILED.",
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["SIMULATED", "PENDING", "SETTLED", "BLOCKED", "FAILED"]
+          "enum": [
+            "SIMULATED",
+            "PENDING",
+            "SETTLED",
+            "BLOCKED",
+            "FAILED"
+          ]
         },
         "txHash": {
           "type": "string",
@@ -84,7 +95,9 @@
           "description": "ISO 8601 timestamp when settlement was confirmed on-chain."
         }
       },
-      "required": ["status"]
+      "required": [
+        "status"
+      ]
     },
     "policyId": {
       "type": "string",
@@ -99,6 +112,11 @@
       "type": "object",
       "description": "Arbitrary key-value metadata attached by the agent or recipe",
       "additionalProperties": true
+    },
+    "amountMinorUnits": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "Canonical 6-decimal ERC-20 USDC minor units encoded as an unsigned integer string"
     }
   }
 }
