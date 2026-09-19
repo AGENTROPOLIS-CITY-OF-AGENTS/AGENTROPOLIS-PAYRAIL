@@ -13,12 +13,12 @@
 import {
   generateId,
   formatTimestamp,
-  roundUsdc,
   type AgentId,
   type DistrictId,
   type TaskId,
   type ReceiptId,
-  type UsdcAmount,
+  type UsdcMinorUnitString,
+  formatUsdcMinorUnitString,
   type SettlementStatus,
 } from "@agentropolis/payrail-core";
 
@@ -46,7 +46,7 @@ export interface AgentTaskReceipt {
   districtId: DistrictId;
   taskType: string;
   description: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   currency: "USDC";
   status: ReceiptStatus;
   dryRun: boolean;
@@ -63,7 +63,7 @@ export interface CreateReceiptInput {
   districtId: DistrictId;
   taskType: string;
   description: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   status: ReceiptStatus;
   dryRun: boolean;
   policyId?: string;
@@ -103,7 +103,7 @@ export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
     districtId: input.districtId,
     taskType: input.taskType,
     description: input.description,
-    amountUsdc: roundUsdc(input.amountUsdc),
+    amountMinorUnits: input.amountMinorUnits,
     currency: "USDC",
     status: input.status,
     dryRun: input.dryRun,
@@ -169,7 +169,7 @@ export function printReceipt(receipt: AgentTaskReceipt): void {
   console.log(`District:     ${receipt.districtId}`);
   console.log(`Task Type:    ${receipt.taskType}`);
   console.log(`Description:  ${receipt.description}`);
-  console.log(`Amount:       $${receipt.amountUsdc} ${receipt.currency}`);
+  console.log(`Amount:       ${formatUsdcMinorUnitString(receipt.amountMinorUnits)} ${receipt.currency}`);
   console.log(`Status:       ${receipt.status}`);
   console.log(`TX Hash:      ${txHash}`);
   console.log(`Issued At:    ${receipt.issuedAt}`);
