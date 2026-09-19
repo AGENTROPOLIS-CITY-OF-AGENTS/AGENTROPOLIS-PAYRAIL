@@ -14,9 +14,9 @@
 |-------|------|-------------|
 | `policyId` | string | Unique policy identifier |
 | `agentId` | string | Agent this policy governs (`"*"` = global default) |
-| `maxSpendPerTaskUsdc` | number | Max USDC per individual task |
-| `maxSpendPerDayUsdc` | number | Max USDC in a rolling 24h window |
-| `approvalThresholdUsdc` | number | Amounts ≥ this require human/supervisor approval |
+| `maxSpendPerTaskMinorUnits` | string | Max USDC minor units per individual task |
+| `maxSpendPerDayMinorUnits` | string | Max USDC minor units per day |
+| `approvalThresholdMinorUnits` | string | Minor-unit amount at or above this requires human/supervisor approval |
 | `allowedDistricts` | string[] | Permitted districts (`["*"]` = all except blocked) |
 | `blockedDistricts` | string[] | Districts always denied |
 | `dryRun` | boolean | `true` = simulate only, no real funds |
