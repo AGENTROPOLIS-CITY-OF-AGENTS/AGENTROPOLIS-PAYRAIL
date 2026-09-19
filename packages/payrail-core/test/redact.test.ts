@@ -64,3 +64,22 @@ test("containsSecret detects secret-shaped content", () => {
   assert.ok(containsSecret("Bearer abcdefghijklmnopqrstuvwxyz123456"));
   assert.ok(!containsSecret("just a normal log line"));
 });
+
+test("redactObject redacts arbitrary values under sensitive keys", () => {
+  const obj = {
+    apiKey: "provider-secret-with-no-known-prefix",
+    password: "plain-arbitrary-value",
+    nested: { wallet_key: "another-plain-value" },
+  };
+  const out = redactObject(obj);
+  assert.equal(out.apiKey, "[REDACTED]");
+  assert.equal(out.password, "[REDACTED]");
+  assert.equal(out.nested.wallet_key, "[REDACTED]");
+});
+
+test("containsSecret is stable across repeated calls", () => {
+  const input = "password=supersecret123";
+  assert.equal(containsSecret(input), true);
+  assert.equal(containsSecret(input), true);
+  assert.equal(containsSecret(input), true);
+});
