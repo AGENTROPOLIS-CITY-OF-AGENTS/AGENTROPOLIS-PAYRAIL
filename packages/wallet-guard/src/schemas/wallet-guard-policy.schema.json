@@ -6,9 +6,9 @@
   "required": [
     "policyId",
     "agentId",
-    "maxSpendPerTaskUsdc",
-    "maxSpendPerDayUsdc",
-    "approvalThresholdUsdc",
+    "maxSpendPerTaskMinorUnits",
+    "maxSpendPerDayMinorUnits",
+    "approvalThresholdMinorUnits",
     "allowedDistricts",
     "blockedDistricts",
     "dryRun"
@@ -23,29 +23,18 @@
       "type": "string",
       "description": "The agent this policy governs. Use '*' for a global default."
     },
-    "maxSpendPerTaskUsdc": {
-      "type": "number",
-      "minimum": 0,
-      "description": "Maximum USDC allowed per individual task. Tasks above this limit are rejected."
-    },
-    "maxSpendPerDayUsdc": {
-      "type": "number",
-      "minimum": 0,
-      "description": "Maximum USDC the agent may spend in a rolling 24-hour window."
-    },
-    "approvalThresholdUsdc": {
-      "type": "number",
-      "minimum": 0,
-      "description": "Tasks at or above this amount require explicit human or supervisor-agent approval before settlement."
-    },
     "allowedDistricts": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Districts this agent is permitted to bill. Use ['*'] to allow all districts not explicitly blocked."
     },
     "blockedDistricts": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Districts this agent is NEVER permitted to bill, regardless of other rules."
     },
     "dryRun": {
@@ -55,6 +44,21 @@
     "notes": {
       "type": "string",
       "description": "Human-readable notes about this policy."
+    },
+    "maxSpendPerTaskMinorUnits": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "Maximum USDC minor units allowed per individual task."
+    },
+    "maxSpendPerDayMinorUnits": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "Maximum USDC minor units allowed per day."
+    },
+    "approvalThresholdMinorUnits": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "Amounts at or above this USDC minor-unit threshold require approval."
     }
   }
 }
