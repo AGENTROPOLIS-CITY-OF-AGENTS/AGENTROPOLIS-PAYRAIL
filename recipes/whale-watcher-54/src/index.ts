@@ -22,6 +22,8 @@ import {
   type AgentId,
   type DistrictId,
   type TaskId,
+  formatUsdcMinorUnitString,
+  usdcMinorUnitString,
 } from "@agentropolis/payrail-core";
 
 import {
@@ -51,9 +53,9 @@ const TASK_TYPE = "whale-alert";
 const POLICY: WalletGuardPolicy = {
   policyId: "whale-watcher-54-policy",
   agentId: AGENT_ID,
-  maxSpendPerTaskUsdc: 0.05,
-  maxSpendPerDayUsdc: 0.5,
-  approvalThresholdUsdc: 0.04,
+  maxSpendPerTaskMinorUnits: usdcMinorUnitString("50000"),
+  maxSpendPerDayMinorUnits: usdcMinorUnitString("500000"),
+  approvalThresholdMinorUnits: usdcMinorUnitString("40000"),
   allowedDistricts: [DISTRICTS.HARBOR, DISTRICTS.DOWNTOWN],
   blockedDistricts: ["dark-alley"],
   dryRun: true, // Always true for this recipe — no real funds
@@ -186,9 +188,10 @@ async function runWhaleWatcher54(): Promise<void> {
 
   // Look up the pricing rule for this task type
   const priceInfo = lookupPrice(DISTRICT_ID, TASK_TYPE);
-  const taskPriceUsdc = priceInfo?.effectivePriceUsdc ?? 0.01;
+  const taskPriceMinorUnits =
+    priceInfo?.effectivePriceMinorUnits ?? usdcMinorUnitString("10000");
   console.log(
-    `[whale-watcher-54] Task fee: $${taskPriceUsdc} USDC per alert (rule: ${priceInfo?.rule.ruleId ?? "default"})\n`
+    `[whale-watcher-54] Task fee: ${formatUsdcMinorUnitString(taskPriceMinorUnits)} USDC per alert (rule: ${priceInfo?.rule.ruleId ?? "default"})\n`
   );
 
   let alertsCreated = 0;
@@ -218,7 +221,7 @@ async function runWhaleWatcher54(): Promise<void> {
         districtId: DISTRICT_ID,
         taskId,
         taskType: TASK_TYPE,
-        amountUsdc: taskPriceUsdc,
+        amountMinorUnits: taskPriceMinorUnits,
         description: `Whale alert for ${alert.walletAddress}`,
         dryRun: POLICY.dryRun,
         requestedAt: formatTimestamp(new Date()),
@@ -241,7 +244,7 @@ async function runWhaleWatcher54(): Promise<void> {
       districtId: DISTRICT_ID,
       taskType: TASK_TYPE,
       description: `[MOCK] Whale alert — ${alert.severity} — $${alert.amountUsdc} USDC ${alert.direction} on ${alert.walletAddress}`,
-      amountUsdc: taskPriceUsdc,
+      amountMinorUnits: taskPriceMinorUnits,
       status: "SIMULATED",
       dryRun: true,
       policyId: POLICY.policyId,
