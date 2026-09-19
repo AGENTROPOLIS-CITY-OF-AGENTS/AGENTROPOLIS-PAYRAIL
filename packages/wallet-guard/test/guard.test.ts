@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { evaluatePolicy, type WalletGuardPolicy } from "../src/index.js";
-import type { PaymentRequest } from "@agentropolis/payrail-core";
+import {
+  usdcMinorUnitString,
+  type PaymentRequest,
+} from "@agentropolis/payrail-core";
 
 function baseRequest(overrides: Partial<PaymentRequest> = {}): PaymentRequest {
   return {
@@ -10,7 +13,7 @@ function baseRequest(overrides: Partial<PaymentRequest> = {}): PaymentRequest {
     districtId: "harbor" as never,
     taskId: "task-1" as never,
     taskType: "whale-alert",
-    amountUsdc: 0.05,
+    amountMinorUnits: usdcMinorUnitString("50000"),
     description: "test",
     dryRun: false,
     requestedAt: new Date().toISOString(),
@@ -22,9 +25,9 @@ function basePolicy(overrides: Partial<WalletGuardPolicy> = {}): WalletGuardPoli
   return {
     policyId: "policy-1",
     agentId: "agent-1",
-    maxSpendPerTaskUsdc: 0.1,
-    maxSpendPerDayUsdc: 1.0,
-    approvalThresholdUsdc: 0.05,
+    maxSpendPerTaskMinorUnits: usdcMinorUnitString("100000"),
+    maxSpendPerDayMinorUnits: usdcMinorUnitString("1000000"),
+    approvalThresholdMinorUnits: usdcMinorUnitString("50000"),
     allowedDistricts: ["*"],
     blockedDistricts: ["dark-alley"],
     dryRun: false,
@@ -47,39 +50,27 @@ test("blocked district returns BLOCKED", () => {
   assert.equal(decision.allowed, false);
 });
 
-test("amount above approval threshold returns PENDING (approval required)", () => {
-  const decision = evaluatePolicy(
-    baseRequest({ amountUsdc: 0.05 }),
-    basePolicy({ approvalThresholdUsdc: 0.05 }),
-  );
+test("amount at approval threshold requires approval", () => {
+  const decision = evaluatePolicy(baseRequest(), basePolicy());
   assert.equal(decision.status, "PENDING");
   assert.equal(decision.requiresApproval, true);
 });
 
-test("amount within limits returns PENDING (approved, awaiting settlement)", () => {
+test("amount within limits returns PENDING without approval", () => {
   const decision = evaluatePolicy(
-    baseRequest({ amountUsdc: 0.01 }),
-    basePolicy({ approvalThresholdUsdc: 0.05 }),
+    baseRequest({ amountMinorUnits: usdcMinorUnitString("10000") }),
+    basePolicy(),
   );
   assert.equal(decision.status, "PENDING");
   assert.equal(decision.allowed, true);
   assert.equal(decision.requiresApproval, false);
 });
 
-test("per-task limit in integer minor units blocks correctly", () => {
+test("per-task integer limit blocks exactly", () => {
   const decision = evaluatePolicy(
-    baseRequest({ amountUsdc: 0.2 }),
-    basePolicy({ maxSpendPerTaskMinorUnits: 100000n }), // $0.10
+    baseRequest({ amountMinorUnits: usdcMinorUnitString("100001") }),
+    basePolicy(),
   );
   assert.equal(decision.status, "BLOCKED");
   assert.equal(decision.allowed, false);
-});
-
-test("approval threshold in integer minor units triggers PENDING", () => {
-  const decision = evaluatePolicy(
-    baseRequest({ amountUsdc: 0.05 }),
-    basePolicy({ approvalThresholdMinorUnits: 50000n }), // $0.05
-  );
-  assert.equal(decision.status, "PENDING");
-  assert.equal(decision.requiresApproval, true);
 });
