@@ -1,0 +1,27 @@
+name: Rust Recovery Rail
+
+on:
+  pull_request:
+    paths:
+      - "packages/stellar-recovery-rail/**"
+      - ".github/workflows/rust-recovery-rail.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/stellar-recovery-rail/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/stellar-recovery-rail
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
