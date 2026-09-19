@@ -12,8 +12,13 @@ import {
   type SettlementRailSlug,
   type UsdcAmount,
 } from "@agentropolis/payrail-core";
+import {
+  SettlementExecutionBlockedError,
+  type SimulatedSettlement,
+} from "./shared";
 
 export * from "./arc";
+export * from "./shared";
 export type { ExecutedSettlement } from "@agentropolis/payrail-core";
 
 export interface SettlementRequest {
@@ -28,25 +33,6 @@ export interface SettlementRequest {
   approvalRef?: string;
   executionEnvelopeRef?: string;
   aegisDecisionRef?: string;
-}
-
-export interface SimulatedSettlement {
-  kind: "simulated";
-  reason: string;
-  receiptId: string;
-  rail: SettlementRailSlug;
-  chainId: number | null;
-  executionMode: "simulated";
-  message: string;
-}
-
-export class SettlementExecutionBlockedError extends Error {
-  readonly code = "SETTLEMENT_EXECUTION_BLOCKED";
-
-  constructor(message: string) {
-    super(message);
-    this.name = "SettlementExecutionBlockedError";
-  }
 }
 
 export async function simulateSettlement(
@@ -68,10 +54,7 @@ export async function simulateSettlement(
   };
 }
 
-/**
- * Backward-compatible alias. It is explicitly simulation-only and carries no
- * success boolean or transaction hash.
- */
+/** Backward-compatible simulation alias. Never signals financial execution. */
 export async function settle(
   request: SettlementRequest,
 ): Promise<SimulatedSettlement> {
@@ -87,8 +70,14 @@ export async function executeSettlement(
     );
   }
 
+  if (!request.signedIntent) {
+    throw new SettlementExecutionBlockedError(
+      "Execution blocked: signedIntent is required for a live lane.",
+    );
+  }
+
   throw new SettlementExecutionBlockedError(
-    "Live x402 settlement is disabled until an external signer, signed-intent validation, replay/idempotency, finality verification, and operator enablement are implemented.",
+    "Live x402 settlement is disabled until signed-intent validation/binding, external signer, replay/idempotency, finality verification, and operator enablement are implemented.",
   );
 }
 
