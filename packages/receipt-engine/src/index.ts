@@ -22,7 +22,7 @@ import {
   type SettlementStatus,
 } from "@agentropolis/payrail-core";
 
-export const RECEIPT_SCHEMA_VERSION = "1.0.0";
+export const RECEIPT_SCHEMA_VERSION = "2.0.0";
 
 // ---------------------------------------------------------------------------
 // Receipt type
@@ -91,7 +91,42 @@ console.warn(
  * Create and store a new receipt for an agent task payment.
  * This is the only way to produce a receipt — never construct one manually.
  */
+function assertReceiptConsistency(input: CreateReceiptInput): void {
+  const settlement = input.settlement;
+
+  if (input.status === "CANCELLED") {
+    if (settlement) throw new Error("CANCELLED receipt must not include settlement evidence");
+    return;
+  }
+
+  if (!settlement) {
+    if (input.status === "SETTLED") {
+      throw new Error("SETTLED receipt requires settlement evidence");
+    }
+    return;
+  }
+
+  if (settlement.status !== input.status) {
+    throw new Error(`receipt status ${input.status} does not match settlement status ${settlement.status}`);
+  }
+
+  if (input.status === "SETTLED") {
+    if (!settlement.txHash || settlement.txHash.trim().length === 0) {
+      throw new Error("SETTLED receipt requires a non-empty txHash");
+    }
+    if (!settlement.settledAt || Number.isNaN(Date.parse(settlement.settledAt))) {
+      throw new Error("SETTLED receipt requires a valid settledAt timestamp");
+    }
+  }
+
+  if (["SIMULATED", "BLOCKED", "FAILED"].includes(input.status) && settlement.txHash) {
+    throw new Error(`${input.status} receipt must not include txHash`);
+  }
+}
+
 export function createReceipt(input: CreateReceiptInput): AgentTaskReceipt {
+  assertReceiptConsistency(input);
+
   const receiptId = generateId("rcpt") as ReceiptId;
   const now = formatTimestamp(new Date());
 
@@ -129,6 +164,10 @@ export function getReceipt(receiptId: ReceiptId): AgentTaskReceipt | undefined {
  * TODO: Phase 2 — called by x402-adapter after settlement confirmation
  */
 export function markSettled(receiptId: ReceiptId, txHash: string): AgentTaskReceipt {
+  if (!txHash || txHash.trim().length === 0) {
+    throw new Error("txHash must be a non-empty string");
+  }
+
   const receipt = receiptStore.get(receiptId);
   if (!receipt) {
     throw new Error(`Receipt not found: ${receiptId}`);
