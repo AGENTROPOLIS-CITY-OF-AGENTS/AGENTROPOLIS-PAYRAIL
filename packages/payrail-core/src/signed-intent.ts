@@ -99,23 +99,38 @@ export function validateSignedIntentBindings(
   intent: SignedIntent,
 ): string[] {
   const problems: string[] = [];
-  const b = intent.bindings;
+  const raw = intent as unknown as { bindings?: unknown };
+
+  if (!raw || typeof raw !== "object" || raw.bindings === null || typeof raw.bindings !== "object" || Array.isArray(raw.bindings)) {
+    return ["bindings object is required"];
+  }
+
+  const b = raw.bindings as Partial<SignedIntentBindings>;
 
   if (!b.actor) problems.push("actor is required");
   if (!b.mandate) problems.push("mandate is required");
-  if (!b.amount || b.amount.minorUnits < 0n) problems.push("amount is required and must be non-negative");
+  if (!b.amount || typeof b.amount !== "object" || typeof b.amount.minorUnits !== "bigint" || b.amount.minorUnits < 0n) {
+    problems.push("amount is required and must be non-negative");
+  }
   if (!b.asset) problems.push("asset is required");
   if (!b.recipient) problems.push("recipient is required");
   if (!b.chain) problems.push("chain is required");
   if (!b.provider) problems.push("provider is required");
   if (!b.feePolicy?.feePolicyId) problems.push("feePolicy.feePolicyId is required");
-  if (b.feePolicy && b.feePolicy.maxTotalFeeMinorUnits < 0n) {
+  if (
+    b.feePolicy &&
+    (typeof b.feePolicy.maxTotalFeeMinorUnits !== "bigint" ||
+      b.feePolicy.maxTotalFeeMinorUnits < 0n)
+  ) {
     problems.push("feePolicy.maxTotalFeeMinorUnits must be non-negative");
   }
   if (!b.quote?.quoteId) problems.push("quote.quoteId is required");
   if (!b.quote?.quoteHash) problems.push("quote.quoteHash is required");
   if (!b.quote?.expiresAt) problems.push("quote.expiresAt is required");
-  if (b.quote && b.quote.amountMinorUnits < 0n) {
+  if (
+    b.quote &&
+    (typeof b.quote.amountMinorUnits !== "bigint" || b.quote.amountMinorUnits < 0n)
+  ) {
     problems.push("quote.amountMinorUnits must be non-negative");
   }
   if (!b.expiry) problems.push("expiry is required");
@@ -124,8 +139,24 @@ export function validateSignedIntentBindings(
   if (!b.attestation54t?.id) problems.push("attestation54t.id is required");
 
   // Quote amount must match the intent amount (same scale).
-  if (b.amount && b.quote && b.quote.amountMinorUnits !== b.amount.minorUnits) {
+  if (
+    b.amount &&
+    b.quote &&
+    typeof b.amount.minorUnits === "bigint" &&
+    typeof b.quote.amountMinorUnits === "bigint" &&
+    b.quote.amountMinorUnits !== b.amount.minorUnits
+  ) {
     problems.push("quote.amountMinorUnits does not match intent amount");
+  }
+
+  // Quote expiry must be valid and live.
+  if (b.quote?.expiresAt) {
+    const quoteExpiryMs = Date.parse(b.quote.expiresAt);
+    if (Number.isNaN(quoteExpiryMs)) {
+      problems.push("quote.expiresAt is not a valid ISO 8601 timestamp");
+    } else if (quoteExpiryMs <= Date.now()) {
+      problems.push("quote.expiresAt is in the past");
+    }
   }
 
   // Expiry must be a valid ISO timestamp and not already past.
