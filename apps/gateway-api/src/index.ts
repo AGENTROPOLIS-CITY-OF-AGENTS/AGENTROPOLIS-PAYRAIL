@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { type Express, Request, Response, NextFunction } from "express";
 import {
   PAYRAIL_VERSION,
   formatTimestamp,
@@ -6,7 +6,7 @@ import {
   parseUsdc,
 } from "@agentropolis/payrail-core";
 
-const app = express();
+const app: Express = express();
 const PORT = process.env.PORT ?? 3000;
 
 app.use(express.json());
