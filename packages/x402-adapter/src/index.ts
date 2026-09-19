@@ -2,21 +2,20 @@
 // AGENTROPOLIS-PAYRAIL — x402-adapter
 //
 // Guarded x402 / USDC settlement adapters.
-//
-// ⚠️  This module NEVER stores, accepts, or processes private keys or seed phrases.
-// ⚠️  "No agent gets raw wallet power."
-//
-// Real settlement must use an external signing service and pass PAYRAIL policy,
-// Execution Envelope, and AEGIS gates. Base remains the default settlement lane;
-// Arc is an additive, chain-agnostic rail.
+// No private keys, seed phrases, or raw signing power are accepted here.
 // ---------------------------------------------------------------------------
 
-import type { UsdcAmount } from "@agentropolis/payrail-core";
+import {
+  EVM_CHAINS,
+  formatUsdc,
+  type ExecutedSettlement,
+  type SettlementRailSlug,
+  type UsdcAmount,
+} from "@agentropolis/payrail-core";
 
 export * from "./arc";
+export type { ExecutedSettlement } from "@agentropolis/payrail-core";
 
-/** A settlement request sent to the x402 adapter.
- *  Note: contains NO private key — signing happens in an external service. */
 export interface SettlementRequest {
   receiptId: string;
   agentId: string;
@@ -24,47 +23,76 @@ export interface SettlementRequest {
   toAddress: string;
   amountUsdc: UsdcAmount;
   taskId: string;
-  /** Signed payment intent from external signing service (Phase 2) */
+  rail?: SettlementRailSlug;
   signedIntent?: string;
+  approvalRef?: string;
+  executionEnvelopeRef?: string;
+  aegisDecisionRef?: string;
 }
 
-export interface SettlementResult {
-  success: boolean;
-  txHash: string | null;
+export interface SimulatedSettlement {
+  kind: "simulated";
+  reason: string;
+  receiptId: string;
+  rail: SettlementRailSlug;
+  chainId: number | null;
+  executionMode: "simulated";
   message: string;
-  simulatedOnly: boolean;
 }
 
-/**
- * Settle a payment via the legacy/default x402 / USDC lane.
- *
- * Current behavior is simulation-only. Arc-specific requests should use
- * settleOnArc(), which is also guarded and simulation-only in this build.
- */
-export async function settle(request: SettlementRequest): Promise<SettlementResult> {
-  console.warn(
-    "[x402-adapter] STUB: Real settlement not implemented. Returning simulated result."
-  );
+export class SettlementExecutionBlockedError extends Error {
+  readonly code = "SETTLEMENT_EXECUTION_BLOCKED";
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  constructor(message: string) {
+    super(message);
+    this.name = "SettlementExecutionBlockedError";
+  }
+}
+
+export async function simulateSettlement(
+  request: SettlementRequest,
+): Promise<SimulatedSettlement> {
+  const rail = request.rail ?? "base";
+  const chain = Object.values(EVM_CHAINS).find((candidate) => candidate.slug === rail);
 
   return {
-    success: true,
-    txHash: null,
-    message: `[SIMULATED] Settlement of $${request.amountUsdc} USDC to ${request.toAddress} — not yet real.`,
-    simulatedOnly: true,
+    kind: "simulated",
+    reason: "Live settlement is not enabled for the generic x402 lane.",
+    receiptId: request.receiptId,
+    rail,
+    chainId: chain?.chainId ?? null,
+    executionMode: "simulated",
+    message:
+      `[SIMULATED] Settlement of $${formatUsdc(request.amountUsdc)} USDC ` +
+      `to ${request.toAddress}. No funds moved.`,
   };
 }
 
 /**
- * Verify a settlement by tx hash.
- *
- * Current behavior is intentionally unconfirmed until a live provider adapter
- * is explicitly enabled.
+ * Backward-compatible alias. It is explicitly simulation-only and carries no
+ * success boolean or transaction hash.
  */
-export async function verifySettlement(txHash: string): Promise<boolean> {
-  console.warn(
-    `[x402-adapter] STUB: verifySettlement(${txHash}) — live verification not enabled.`
+export async function settle(
+  request: SettlementRequest,
+): Promise<SimulatedSettlement> {
+  return simulateSettlement(request);
+}
+
+export async function executeSettlement(
+  request: SettlementRequest,
+): Promise<ExecutedSettlement> {
+  if (!request.approvalRef || !request.executionEnvelopeRef || !request.aegisDecisionRef) {
+    throw new SettlementExecutionBlockedError(
+      "Execution blocked: approval, Execution Envelope, and AEGIS references are required.",
+    );
+  }
+
+  throw new SettlementExecutionBlockedError(
+    "Live x402 settlement is disabled until an external signer, signed-intent validation, replay/idempotency, finality verification, and operator enablement are implemented.",
   );
+}
+
+export async function verifySettlement(_txHash: string): Promise<boolean> {
+  // Unconfirmed-until-live: a stub must never create execution evidence.
   return false;
 }
