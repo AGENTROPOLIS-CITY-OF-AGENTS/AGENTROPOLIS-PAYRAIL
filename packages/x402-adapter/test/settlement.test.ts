@@ -200,3 +200,35 @@ test("Arc settleOnArc refuses signed intent amount mismatch", async () => {
   assert.equal(result.outcome.status, "BLOCKED");
   assert.equal(result.outcome.reason, "signed-intent-binding-mismatch");
 });
+
+test("x402 concurrent retries cannot both proceed", async () => {
+  replayGuard.clear();
+  const request = baseRequest({ idempotencyKey: "idem-concurrent" });
+
+  const [a, b] = await Promise.all([settle(request), settle(request)]);
+  const statuses = [a.status, b.status].sort();
+
+  assert.deepEqual(statuses, ["BLOCKED", "SIMULATED"]);
+  assert.equal(replayGuard.size, 1);
+});
+
+test("Arc settleOnArc refuses a signed intent for another provider", async () => {
+  arcReplayGuard.clear();
+  const intent = validArcIntent();
+  intent.bindings.provider = "x402";
+
+  const result = await settleOnArc({
+    receiptId: "rcpt-provider-mismatch",
+    agentId: "agent-1",
+    taskId: "task-1",
+    districtId: "harbor",
+    toAddress: "0xRecipient0000000000000000000000000000000001",
+    amountMinorUnits: usdcMinorUnitString("50000"),
+    rail: "arc-testnet",
+    idempotencyKey: "idem-provider-mismatch",
+    signedIntent: intent,
+  });
+
+  assert.equal(result.outcome.status, "BLOCKED");
+  assert.equal(result.outcome.reason, "signed-intent-binding-mismatch");
+});
