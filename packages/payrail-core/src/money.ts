@@ -184,22 +184,37 @@ export function arcNativeToUsdc(arc: Money): Money {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy compatibility helpers
+// JSON/API-safe integer boundary
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a legacy float USDC amount (e.g. 0.05) to integer minor units.
- * This is a BRIDGE for existing callers only — new code must use parseUsdc /
- * usdcMinorUnits. Float input is rounded to 6 decimals to avoid drift.
+ * JSON cannot encode bigint. Public API / receipt boundaries therefore carry
+ * USDC ERC-20 minor units as a canonical unsigned integer string.
+ *
+ * Example: "50000" = 0.05 USDC at the canonical 6-decimal ERC-20 scale.
  */
-export function legacyUsdcToMinorUnits(amount: number): bigint {
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error("legacyUsdcToMinorUnits: amount must be a finite non-negative number");
+export type UsdcMinorUnitString = string & {
+  readonly __brand: "UsdcMinorUnitString";
+};
+
+export function usdcMinorUnitString(value: string | bigint): UsdcMinorUnitString {
+  const raw = typeof value === "bigint" ? value.toString() : value;
+  if (!/^(0|[1-9][0-9]*)$/.test(raw)) {
+    throw new Error(
+      "usdcMinorUnitString: value must be a canonical non-negative integer string",
+    );
   }
-  return BigInt(Math.round(amount * 1_000_000));
+  return raw as UsdcMinorUnitString;
 }
 
-/** Convert integer minor units back to a legacy float USDC amount (6 decimals). */
-export function minorUnitsToLegacyUsdc(minorUnits: bigint): number {
-  return Number(minorUnits) / 1_000_000;
+export function usdcMinorUnitBigInt(value: UsdcMinorUnitString): bigint {
+  return BigInt(value);
+}
+
+export function usdcMinorUnitStringToMoney(value: UsdcMinorUnitString): Money {
+  return usdcMinorUnits(usdcMinorUnitBigInt(value));
+}
+
+export function formatUsdcMinorUnitString(value: UsdcMinorUnitString): string {
+  return formatMinorUnits(usdcMinorUnitBigInt(value), USDC_ERC20_DECIMALS);
 }
