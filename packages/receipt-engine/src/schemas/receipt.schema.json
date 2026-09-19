@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AgentTaskReceipt",
-  "description": "Immutable receipt issued for every agent task payment in AGENTROPOLIS-PAYRAIL.",
+  "description": "Immutable exact-money receipt for AGENTROPOLIS-PAYRAIL.",
   "type": "object",
   "required": [
     "receiptId",
@@ -14,80 +14,37 @@
     "currency",
     "status",
     "dryRun",
+    "executionMode",
     "issuedAt"
   ],
   "additionalProperties": false,
   "properties": {
-    "receiptId": {
-      "type": "string",
-      "description": "Globally unique receipt identifier"
-    },
-    "schemaVersion": {
-      "type": "string",
-      "const": "1.0.0",
-      "description": "Schema version for forward compatibility"
-    },
-    "taskId": {
-      "type": "string",
-      "description": "The task this receipt is for"
-    },
-    "agentId": {
-      "type": "string",
-      "description": "The agent that performed the task"
-    },
-    "districtId": {
-      "type": "string",
-      "description": "The district billed for this task"
-    },
-    "taskType": {
-      "type": "string",
-      "description": "Category of task (e.g. 'osint-lookup', 'npc-prompt', 'whale-alert')"
-    },
-    "description": {
-      "type": "string",
-      "description": "Human-readable description of the task performed"
-    },
+    "receiptId": { "type": "string" },
+    "schemaVersion": { "type": "string", "const": "1.1.0" },
+    "taskId": { "type": "string" },
+    "agentId": { "type": "string" },
+    "districtId": { "type": "string" },
+    "taskType": { "type": "string" },
+    "description": { "type": "string" },
     "amountUsdc": {
-      "type": "number",
-      "minimum": 0,
-      "description": "USDC amount charged for this task"
-    },
-    "currency": {
       "type": "string",
-      "const": "USDC",
-      "description": "Payment currency (always USDC for MVP)"
+      "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,6})?$",
+      "description": "Exact canonical USDC decimal string. Never floating-point."
     },
+    "currency": { "type": "string", "const": "USDC" },
     "status": {
       "type": "string",
-      "enum": ["dry-run-accepted", "pending-approval", "settled", "failed", "cancelled"],
-      "description": "Final status of the payment associated with this receipt"
+      "enum": ["dry-run-accepted", "pending-approval", "settled", "failed", "cancelled"]
     },
-    "dryRun": {
-      "type": "boolean",
-      "description": "True if this receipt was generated in dry-run mode (no real funds moved)"
-    },
-    "settlementTxHash": {
-      "type": ["string", "null"],
-      "description": "On-chain transaction hash after settlement. Null for dry-run or pending. TODO: populated by x402-adapter (Phase 2)"
-    },
-    "policyId": {
+    "dryRun": { "type": "boolean" },
+    "executionMode": {
       "type": "string",
-      "description": "The wallet-guard policy that approved this payment"
+      "enum": ["simulated", "live"]
     },
-    "issuedAt": {
-      "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 timestamp when this receipt was created"
-    },
-    "settledAt": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "ISO 8601 timestamp when settlement was confirmed on-chain. Null until settled."
-    },
-    "metadata": {
-      "type": "object",
-      "description": "Arbitrary key-value metadata attached by the agent or recipe",
-      "additionalProperties": true
-    }
+    "settlementTxHash": { "type": ["string", "null"] },
+    "policyId": { "type": "string" },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "settledAt": { "type": ["string", "null"], "format": "date-time" },
+    "metadata": { "type": "object", "additionalProperties": true }
   }
 }
