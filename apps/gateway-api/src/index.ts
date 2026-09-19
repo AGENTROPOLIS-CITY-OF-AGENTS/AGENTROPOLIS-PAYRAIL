@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
-import { PAYRAIL_VERSION, formatTimestamp } from "@agentropolis/payrail-core";
+import { PAYRAIL_VERSION, formatTimestamp, usdcMinorUnitString } from "@agentropolis/payrail-core";
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -26,17 +26,27 @@ app.get("/health", (_req: Request, res: Response) => {
 // TODO: wire real x402 settlement here (Phase 2) — NO raw keys accepted here
 // ---------------------------------------------------------------------------
 app.post("/pay", (req: Request, res: Response) => {
-  const { agentId, districtId, taskId, amountUsdc, dryRun = true } = req.body as {
+  const { agentId, districtId, taskId, amountMinorUnits, dryRun = true } = req.body as {
     agentId?: string;
     districtId?: string;
     taskId?: string;
-    amountUsdc?: number;
+    amountMinorUnits?: string;
     dryRun?: boolean;
   };
 
-  if (!agentId || !districtId || !taskId || amountUsdc === undefined) {
+  if (!agentId || !districtId || !taskId || amountMinorUnits === undefined) {
     res.status(400).json({
-      error: "Missing required fields: agentId, districtId, taskId, amountUsdc",
+      error: "Missing required fields: agentId, districtId, taskId, amountMinorUnits",
+    });
+    return;
+  }
+
+  let canonicalAmountMinorUnits: string;
+  try {
+    canonicalAmountMinorUnits = usdcMinorUnitString(amountMinorUnits);
+  } catch {
+    res.status(400).json({
+      error: "amountMinorUnits must be a canonical non-negative integer string",
     });
     return;
   }
@@ -52,7 +62,7 @@ app.post("/pay", (req: Request, res: Response) => {
     taskId,
     agentId,
     districtId,
-    amountUsdc,
+    amountMinorUnits: canonicalAmountMinorUnits,
     receiptId: null, // TODO: receipt-engine.createReceipt(...)
     timestamp: formatTimestamp(new Date()),
   });
