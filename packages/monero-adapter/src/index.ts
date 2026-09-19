@@ -6,7 +6,7 @@
 // (SIMULATED / BLOCKED / FAILED). A SIMULATED result never carries a txId.
 
 import type { SettlementOutcome } from "@agentropolis/payrail-core";
-import { blockedOutcome, failedOutcome, simulatedOutcome } from "@agentropolis/payrail-core";
+import { blockedOutcome, simulatedOutcome } from "@agentropolis/payrail-core";
 
 export type PrivacyDecision = "approved" | "denied" | "approval-required";
 
@@ -92,7 +92,7 @@ export async function simulateMoneroSettlement(
 
   if (request.privacyDecision === "approval-required") {
     return {
-      outcome: failedOutcome(
+      outcome: blockedOutcome(
         "Explicit approval is required before XMR settlement may proceed.",
         "approval-required",
       ),
