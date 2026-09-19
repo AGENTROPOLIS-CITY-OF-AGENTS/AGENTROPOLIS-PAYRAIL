@@ -17,8 +17,9 @@ import {
   moneyEquals,
   usdcToArcNative,
   arcNativeToUsdc,
-  legacyUsdcToMinorUnits,
-  minorUnitsToLegacyUsdc,
+  usdcMinorUnitString,
+  usdcMinorUnitBigInt,
+  formatUsdcMinorUnitString,
 } from "../src/money.js";
 
 test("USDC scales are distinct: ERC-20 is 6 decimals, Arc native is 18", () => {
@@ -114,10 +115,12 @@ test("arcNativeToUsdc refuses sub-6-decimal precision loss", () => {
   assert.throws(() => arcNativeToUsdc(arc));
 });
 
-test("legacy float bridge converts without drift", () => {
-  assert.equal(legacyUsdcToMinorUnits(0.05), 50000n);
-  assert.equal(legacyUsdcToMinorUnits(1), 1000000n);
-  assert.equal(minorUnitsToLegacyUsdc(50000n), 0.05);
-  assert.throws(() => legacyUsdcToMinorUnits(-1));
-  assert.throws(() => legacyUsdcToMinorUnits(Number.NaN));
+
+test("USDC API boundary accepts canonical integer strings only", () => {
+  const value = usdcMinorUnitString("50000");
+  assert.equal(usdcMinorUnitBigInt(value), 50000n);
+  assert.equal(formatUsdcMinorUnitString(value), "0.050000");
+  assert.throws(() => usdcMinorUnitString("0.05"));
+  assert.throws(() => usdcMinorUnitString("050000"));
+  assert.throws(() => usdcMinorUnitString("-1"));
 });
