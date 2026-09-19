@@ -1,3 +1,4 @@
+import type { UsdcMinorUnitString } from "./money";
 // ---------------------------------------------------------------------------
 // AGENTROPOLIS-PAYRAIL — payrail-core
 // Shared types, utilities, and constants used across the monorepo.
@@ -14,15 +15,6 @@ export type DistrictId = string & { readonly __brand: "DistrictId" };
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ReceiptId = string & { readonly __brand: "ReceiptId" };
 export type PolicyId = string & { readonly __brand: "PolicyId" };
-
-/**
- * Legacy float USDC amount (6-decimal ERC-20 USDC), e.g. 0.05 = $0.05.
- *
- * ⚠️  DEPRECATED for new code. Floating-point money is unsafe. Use the
- * integer-safe Money / minor-units helpers in ./money instead. This type is
- * retained only for backward compatibility with existing callers.
- */
-export type UsdcAmount = number;
 
 // ---------------------------------------------------------------------------
 // Integer-safe money + settlement status + intent binding
@@ -161,7 +153,7 @@ export interface WalletExecutionContext {
   functionSelector?: `0x${string}`;
   tokenAddress?: EvmAddress;
   tokenSymbol?: string;
-  approvalAmountUsdc?: UsdcAmount;
+  approvalAmountMinorUnits?: UsdcMinorUnitString;
   sessionKeyId?: string;
   sessionExpiresAt?: string;
 }
@@ -175,7 +167,7 @@ export interface PaymentRequest {
   districtId: DistrictId;
   taskId: TaskId;
   taskType: string;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   description: string;
   dryRun: boolean;
   requestedAt: string;
@@ -194,7 +186,7 @@ export interface PaymentResult {
   status: PaymentStatus;
   taskId: TaskId;
   receiptId: ReceiptId | null;
-  amountUsdc: UsdcAmount;
+  amountMinorUnits: UsdcMinorUnitString;
   message: string;
   timestamp: string;
 }
@@ -223,6 +215,3 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export function roundUsdc(amount: UsdcAmount): UsdcAmount {
-  return Math.round(amount * 1_000_000) / 1_000_000;
-}
