@@ -1,0 +1,26 @@
+{
+  "name": "@agentropolis/chain-router",
+  "version": "0.1.0",
+  "description": "Consumes Genesis Spawn Chain Oracle decisions inside AGENTROPOLIS-PAYRAIL without granting launch or treasury authority.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentropolis/payrail-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
