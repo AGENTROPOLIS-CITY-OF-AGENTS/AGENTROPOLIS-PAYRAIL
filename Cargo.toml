@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["crates/greenrails-settlement"]
+# Standalone Rust crates under packages/* (e.g. stellar-recovery-rail) build with
+# their own Cargo.toml and are intentionally not workspace members.
+exclude = ["packages", "apps", "recipes"]

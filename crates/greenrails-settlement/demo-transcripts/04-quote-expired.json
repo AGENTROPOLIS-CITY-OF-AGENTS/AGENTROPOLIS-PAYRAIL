@@ -1,0 +1,71 @@
+{
+  "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+  "scenario": "quote-expired",
+  "final_state": "QUOTE_EXPIRED",
+  "terminal": true,
+  "open_obligation": false,
+  "state_history": [
+    "QUOTED",
+    "USDC_RESERVED",
+    "QUOTE_EXPIRED"
+  ],
+  "log": [
+    {
+      "event_id": "e1",
+      "event": "USDC_RESERVED",
+      "from": "QUOTED",
+      "to": "USDC_RESERVED",
+      "at": 1757332800,
+      "note": "seller USDC (Base) reserved"
+    },
+    {
+      "event_id": "e2",
+      "event": "QUOTE_EXPIRED",
+      "from": "USDC_RESERVED",
+      "to": "QUOTE_EXPIRED",
+      "at": 1757333101,
+      "note": "quote expired before input authorization; freed 20000000 USDC minor from reserve"
+    }
+  ],
+  "usdc_reserve": {
+    "reserved": 20000000,
+    "released": 0,
+    "freed": 20000000
+  },
+  "buyer_input": {
+    "authorized": 0,
+    "refunded": 0
+  },
+  "intents": [],
+  "signed_receipt": {
+    "receipt": {
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+      "mock": true,
+      "settlement_id": "stl-expired",
+      "quote_id": "q-exp",
+      "final_state": "QUOTE_EXPIRED",
+      "state_history": [
+        "QUOTED",
+        "USDC_RESERVED",
+        "QUOTE_EXPIRED"
+      ],
+      "nft_transfer_confirmed": false,
+      "usdc_released": false,
+      "usdc_reserve": {
+        "reserved": 20000000,
+        "released": 0,
+        "freed": 20000000
+      },
+      "buyer_input": {
+        "authorized": 0,
+        "refunded": 0
+      },
+      "intents": [],
+      "issued_at": 1757333400
+    },
+    "key_id": "greenrails-mock-dev-key-v1",
+    "algorithm": "HMAC-SHA256/canonical-json",
+    "signature_hex": "9a3c878f69aa135f51ebbd2ef90dcc7aaf4475a8a79a0a53d520094417243b18"
+  },
+  "receipt_verifies": true
+}

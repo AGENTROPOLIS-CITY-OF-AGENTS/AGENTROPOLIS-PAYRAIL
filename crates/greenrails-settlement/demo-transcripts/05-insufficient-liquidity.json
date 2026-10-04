@@ -1,0 +1,143 @@
+{
+  "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+  "scenario": "insufficient-liquidity-refunded",
+  "final_state": "REFUNDED",
+  "terminal": true,
+  "open_obligation": false,
+  "state_history": [
+    "QUOTED",
+    "USDC_RESERVED",
+    "INPUT_AUTHORIZED",
+    "INSUFFICIENT_LIQUIDITY",
+    "REFUND_PENDING",
+    "REFUNDED"
+  ],
+  "log": [
+    {
+      "event_id": "e1",
+      "event": "USDC_RESERVED",
+      "from": "QUOTED",
+      "to": "USDC_RESERVED",
+      "at": 1757332800,
+      "note": "seller USDC (Base) reserved"
+    },
+    {
+      "event_id": "e2",
+      "event": "INPUT_AUTHORIZED",
+      "from": "USDC_RESERVED",
+      "to": "INPUT_AUTHORIZED",
+      "at": 1757332805,
+      "note": "buyer input authorized (intent recorded)"
+    },
+    {
+      "event_id": "e3",
+      "event": "LIQUIDITY_CHECK_FAILED",
+      "from": "INPUT_AUTHORIZED",
+      "to": "INSUFFICIENT_LIQUIDITY",
+      "at": 1757332806,
+      "note": "route rejected: SlippageExceeded { executed: 2580, cap: 2550 }; freed 20000000 USDC minor from reserve"
+    },
+    {
+      "event_id": "e4",
+      "event": "REFUND_INITIATED",
+      "from": "INSUFFICIENT_LIQUIDITY",
+      "to": "REFUND_PENDING",
+      "at": 1757332807,
+      "note": "compensating refund initiated (intent recorded)"
+    },
+    {
+      "event_id": "e5",
+      "event": "REFUND_COMPLETED",
+      "from": "REFUND_PENDING",
+      "to": "REFUNDED",
+      "at": 1757332808,
+      "note": "buyer input fully refunded"
+    }
+  ],
+  "usdc_reserve": {
+    "reserved": 20000000,
+    "released": 0,
+    "freed": 20000000
+  },
+  "buyer_input": {
+    "authorized": 2500,
+    "refunded": 2500
+  },
+  "intents": [
+    {
+      "kind": "INPUT_AUTHORIZE",
+      "reference": "mock-input-auth-0001",
+      "settlement_id": "stl-illiquid",
+      "asset": "USDC",
+      "amount_minor": 2500,
+      "detail": "authorize buyer input (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    },
+    {
+      "kind": "INPUT_REFUND",
+      "reference": "mock-input-refund-0002",
+      "settlement_id": "stl-illiquid",
+      "asset": "USDC",
+      "amount_minor": 2500,
+      "detail": "compensating refund of buyer input (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    }
+  ],
+  "signed_receipt": {
+    "receipt": {
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+      "mock": true,
+      "settlement_id": "stl-illiquid",
+      "quote_id": "q-illq",
+      "final_state": "REFUNDED",
+      "state_history": [
+        "QUOTED",
+        "USDC_RESERVED",
+        "INPUT_AUTHORIZED",
+        "INSUFFICIENT_LIQUIDITY",
+        "REFUND_PENDING",
+        "REFUNDED"
+      ],
+      "nft_transfer_confirmed": false,
+      "usdc_released": false,
+      "usdc_reserve": {
+        "reserved": 20000000,
+        "released": 0,
+        "freed": 20000000
+      },
+      "buyer_input": {
+        "authorized": 2500,
+        "refunded": 2500
+      },
+      "intents": [
+        {
+          "kind": "INPUT_AUTHORIZE",
+          "reference": "mock-input-auth-0001",
+          "settlement_id": "stl-illiquid",
+          "asset": "USDC",
+          "amount_minor": 2500,
+          "detail": "authorize buyer input (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        },
+        {
+          "kind": "INPUT_REFUND",
+          "reference": "mock-input-refund-0002",
+          "settlement_id": "stl-illiquid",
+          "asset": "USDC",
+          "amount_minor": 2500,
+          "detail": "compensating refund of buyer input (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        }
+      ],
+      "issued_at": 1757333400
+    },
+    "key_id": "greenrails-mock-dev-key-v1",
+    "algorithm": "HMAC-SHA256/canonical-json",
+    "signature_hex": "d6fe1db96fd426d04731ef9fc9e9447f134bf506344b8752aa7fc5819ae9ed6d"
+  },
+  "receipt_verifies": true
+}

@@ -1,0 +1,211 @@
+{
+  "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+  "scenario": "crypto-success",
+  "final_state": "RECEIPT_FINALIZED",
+  "terminal": true,
+  "open_obligation": false,
+  "state_history": [
+    "QUOTED",
+    "USDC_RESERVED",
+    "INPUT_AUTHORIZED",
+    "XENTS_ROUTED",
+    "NFT_TRANSFER_PENDING",
+    "NFT_TRANSFER_CONFIRMED",
+    "USDC_RELEASED",
+    "RECEIPT_FINALIZED"
+  ],
+  "log": [
+    {
+      "event_id": "e1",
+      "event": "USDC_RESERVED",
+      "from": "QUOTED",
+      "to": "USDC_RESERVED",
+      "at": 1757332800,
+      "note": "seller USDC (Base) reserved"
+    },
+    {
+      "event_id": "e2",
+      "event": "INPUT_AUTHORIZED",
+      "from": "USDC_RESERVED",
+      "to": "INPUT_AUTHORIZED",
+      "at": 1757332805,
+      "note": "buyer input authorized (intent recorded)"
+    },
+    {
+      "event_id": "e3",
+      "event": "XENTS_ROUTED",
+      "from": "INPUT_AUTHORIZED",
+      "to": "XENTS_ROUTED",
+      "at": 1757332806,
+      "note": "exact-output XENTS routed (intent recorded)"
+    },
+    {
+      "event_id": "e4",
+      "event": "NFT_TRANSFER_INITIATED",
+      "from": "XENTS_ROUTED",
+      "to": "NFT_TRANSFER_PENDING",
+      "at": 1757332807,
+      "note": "NFT transfer submitted on native chain (intent recorded)"
+    },
+    {
+      "event_id": "e5",
+      "event": "NFT_TRANSFER_CONFIRMED",
+      "from": "NFT_TRANSFER_PENDING",
+      "to": "NFT_TRANSFER_PENDING",
+      "at": 1757332860,
+      "note": "confirmations pending: Pending { observed: 6, required: 12 }"
+    },
+    {
+      "event_id": "e6",
+      "event": "NFT_TRANSFER_CONFIRMED",
+      "from": "NFT_TRANSFER_PENDING",
+      "to": "NFT_TRANSFER_CONFIRMED",
+      "at": 1757332950,
+      "note": "Confirmed { observed: 12 }"
+    },
+    {
+      "event_id": "e7",
+      "event": "USDC_RELEASED",
+      "from": "NFT_TRANSFER_CONFIRMED",
+      "to": "USDC_RELEASED",
+      "at": 1757332951,
+      "note": "reserved USDC released to seller (intent recorded)"
+    },
+    {
+      "event_id": "e8",
+      "event": "RECEIPT_FINALIZED",
+      "from": "USDC_RELEASED",
+      "to": "RECEIPT_FINALIZED",
+      "at": 1757332952,
+      "note": "both legs verified; receipt finalized"
+    }
+  ],
+  "usdc_reserve": {
+    "reserved": 20000000,
+    "released": 20000000,
+    "freed": 0
+  },
+  "buyer_input": {
+    "authorized": 2500,
+    "refunded": 0
+  },
+  "intents": [
+    {
+      "kind": "INPUT_AUTHORIZE",
+      "reference": "mock-input-auth-0001",
+      "settlement_id": "stl-crypto-success",
+      "asset": "CRYPTO",
+      "amount_minor": 2500,
+      "detail": "authorize buyer input (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    },
+    {
+      "kind": "XENTS_ROUTE",
+      "reference": "mock-xents-route-0001",
+      "settlement_id": "stl-crypto-success",
+      "asset": "XENTS",
+      "amount_minor": 1000000,
+      "detail": "exact-output route consuming 2510 input minor units (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    },
+    {
+      "kind": "NFT_TRANSFER",
+      "reference": "mock-nft-transfer-0001",
+      "settlement_id": "stl-crypto-success",
+      "asset": "NFT:legacy-native-chain",
+      "amount_minor": 1,
+      "detail": "transfer legacy-nft:0xLEGACY/42 to buyer.mock on native chain (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    },
+    {
+      "kind": "USDC_PAYOUT",
+      "reference": "mock-usdc-payout-0001",
+      "settlement_id": "stl-crypto-success",
+      "asset": "USDC:base",
+      "amount_minor": 20000000,
+      "detail": "release reserved USDC to seller.mock (recorded only)",
+      "mock": true,
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+    }
+  ],
+  "signed_receipt": {
+    "receipt": {
+      "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+      "mock": true,
+      "settlement_id": "stl-crypto-success",
+      "quote_id": "q-ok",
+      "final_state": "RECEIPT_FINALIZED",
+      "state_history": [
+        "QUOTED",
+        "USDC_RESERVED",
+        "INPUT_AUTHORIZED",
+        "XENTS_ROUTED",
+        "NFT_TRANSFER_PENDING",
+        "NFT_TRANSFER_CONFIRMED",
+        "USDC_RELEASED",
+        "RECEIPT_FINALIZED"
+      ],
+      "nft_transfer_confirmed": true,
+      "usdc_released": true,
+      "usdc_reserve": {
+        "reserved": 20000000,
+        "released": 20000000,
+        "freed": 0
+      },
+      "buyer_input": {
+        "authorized": 2500,
+        "refunded": 0
+      },
+      "intents": [
+        {
+          "kind": "INPUT_AUTHORIZE",
+          "reference": "mock-input-auth-0001",
+          "settlement_id": "stl-crypto-success",
+          "asset": "CRYPTO",
+          "amount_minor": 2500,
+          "detail": "authorize buyer input (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        },
+        {
+          "kind": "XENTS_ROUTE",
+          "reference": "mock-xents-route-0001",
+          "settlement_id": "stl-crypto-success",
+          "asset": "XENTS",
+          "amount_minor": 1000000,
+          "detail": "exact-output route consuming 2510 input minor units (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        },
+        {
+          "kind": "NFT_TRANSFER",
+          "reference": "mock-nft-transfer-0001",
+          "settlement_id": "stl-crypto-success",
+          "asset": "NFT:legacy-native-chain",
+          "amount_minor": 1,
+          "detail": "transfer legacy-nft:0xLEGACY/42 to buyer.mock on native chain (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        },
+        {
+          "kind": "USDC_PAYOUT",
+          "reference": "mock-usdc-payout-0001",
+          "settlement_id": "stl-crypto-success",
+          "asset": "USDC:base",
+          "amount_minor": 20000000,
+          "detail": "release reserved USDC to seller.mock (recorded only)",
+          "mock": true,
+          "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+        }
+      ],
+      "issued_at": 1757333400
+    },
+    "key_id": "greenrails-mock-dev-key-v1",
+    "algorithm": "HMAC-SHA256/canonical-json",
+    "signature_hex": "df9de6f87c7270b7ea4f4fa8741259d3dc7367aaee089dc90c9298673b8e31c5"
+  },
+  "receipt_verifies": true
+}
