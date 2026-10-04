@@ -1,0 +1,12 @@
+{
+  "banner": "MOCK SETTLEMENT · NO FUNDS WILL MOVE",
+  "scenario": "signed-receipt-verification",
+  "key_id": "greenrails-mock-dev-key-v1",
+  "canonical_json": "{\"banner\":\"MOCK SETTLEMENT · NO FUNDS WILL MOVE\",\"buyer_input\":{\"authorized\":2500,\"refunded\":0},\"final_state\":\"RECEIPT_FINALIZED\",\"intents\":[{\"amount_minor\":2500,\"asset\":\"CARD\",\"banner\":\"MOCK SETTLEMENT · NO FUNDS WILL MOVE\",\"detail\":\"authorize buyer input (recorded only)\",\"kind\":\"INPUT_AUTHORIZE\",\"mock\":true,\"reference\":\"mock-input-auth-0001\",\"settlement_id\":\"stl-card-success\"},{\"amount_minor\":1000000,\"asset\":\"XENTS\",\"banner\":\"MOCK SETTLEMENT · NO FUNDS WILL MOVE\",\"detail\":\"exact-output route consuming 2510 input minor units (recorded only)\",\"kind\":\"XENTS_ROUTE\",\"mock\":true,\"reference\":\"mock-xents-route-0001\",\"settlement_id\":\"stl-card-success\"},{\"amount_minor\":1,\"asset\":\"NFT:legacy-native-chain\",\"banner\":\"MOCK SETTLEMENT · NO FUNDS WILL MOVE\",\"detail\":\"transfer legacy-nft:0xLEGACY/42 to buyer.mock on native chain (recorded only)\",\"kind\":\"NFT_TRANSFER\",\"mock\":true,\"reference\":\"mock-nft-transfer-0001\",\"settlement_id\":\"stl-card-success\"},{\"amount_minor\":20000000,\"asset\":\"USDC:base\",\"banner\":\"MOCK SETTLEMENT · NO FUNDS WILL MOVE\",\"detail\":\"release reserved USDC to seller.mock (recorded only)\",\"kind\":\"USDC_PAYOUT\",\"mock\":true,\"reference\":\"mock-usdc-payout-0001\",\"settlement_id\":\"stl-card-success\"}],\"issued_at\":1757333400,\"mock\":true,\"nft_transfer_confirmed\":true,\"quote_id\":\"q-ok\",\"settlement_id\":\"stl-card-success\",\"state_history\":[\"QUOTED\",\"USDC_RESERVED\",\"INPUT_AUTHORIZED\",\"XENTS_ROUTED\",\"NFT_TRANSFER_PENDING\",\"NFT_TRANSFER_CONFIRMED\",\"USDC_RELEASED\",\"RECEIPT_FINALIZED\"],\"usdc_released\":true,\"usdc_reserve\":{\"freed\":0,\"released\":20000000,\"reserved\":20000000}}",
+  "signature_hex": "2e492cf6cbc771de90c453e95cc9ad05fc65f5e26f147a13ff0e3fb437300162",
+  "verify_original": true,
+  "verify_tampered_amount": false,
+  "verify_wrong_key": false,
+  "replay_same_event_id": "REPLAYED",
+  "replay_conflicting_payload_rejected": true
+}

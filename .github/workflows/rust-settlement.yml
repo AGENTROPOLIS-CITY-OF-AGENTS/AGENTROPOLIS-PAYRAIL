@@ -1,0 +1,33 @@
+name: Rust Settlement Core
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/greenrails-settlement/**"
+      - ".github/workflows/rust-settlement.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/greenrails-settlement/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo run -p greenrails-settlement --example demo > /dev/null
+      - name: demo transcripts are up to date
+        run: git diff --exit-code -- crates/greenrails-settlement/demo-transcripts
