@@ -6,16 +6,15 @@ on:
       - main
   workflow_dispatch:
 
-# pages: write and id-token: write are required by actions/deploy-pages.
-# actions: write is required because this workflow sets permissions and
-# actions/upload-pages-artifact uploads the built site.
+# contents: read, pages: write, and id-token: write are the only token
+# permissions this workflow uses. pages: write and id-token: write are what
+# actions/upload-pages-artifact and actions/deploy-pages require.
 # This workflow does not read or set any secrets. The mock demo build is
 # tsc plus scripts/copy-static.mjs and does not call a payment endpoint.
 permissions:
   contents: read
   pages: write
   id-token: write
-  actions: write
 
 concurrency:
   group: pages
