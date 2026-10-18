@@ -41,15 +41,39 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # Output directory, confirmed by a local build: apps/greenrails-mock-demo/dist
-      # (index.html from public/, compiled modules under dist/src/).
+      # tsc still emits runtime modules to dist/src and tests to dist/test.
+      # The package test script keeps running node --test dist/test/.
       - name: Build greenrails mock demo
         run: pnpm --filter @agentropolis/greenrails-mock-demo build
+
+      # Allowlist only. public/ is the HTML entry and static assets.
+      # dist/src is the runtime modules the page imports. dist/test is not copied.
+      - name: Assemble Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=apps/greenrails-mock-demo
+          out="$app/pages"
+          rm -rf "$out"
+          mkdir -p "$out/src"
+          cp -a "$app/public/." "$out/"
+          cp -a "$app/dist/src/." "$out/src/"
+
+      - name: Reject test paths in the Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=apps/greenrails-mock-demo/pages
+          hits="$(find "$out" \( -name '*.test.*' -o -path '*/test' -o -path '*/test/*' \) | sort)"
+          if [ -n "$hits" ]; then
+            printf 'Pages artifact contains test paths:\n%s\n' "$hits"
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/greenrails-mock-demo/dist
+          path: apps/greenrails-mock-demo/pages
 
   deploy:
     name: deploy-pages
