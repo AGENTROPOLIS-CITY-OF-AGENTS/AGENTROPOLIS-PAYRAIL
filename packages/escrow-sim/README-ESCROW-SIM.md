@@ -11,17 +11,25 @@ escrow leg only: create, fund, release, refund, dispute.
 
 - States: `CREATED`, `FUNDED`, `RELEASED`, `REFUNDED`, `DISPUTED`.
   Terminal: `RELEASED`, `REFUNDED`.
-- `release` requires BOTH an ENTITY54 ALLOW receipt AND a completion-evidence
-  record. It never executes on an unsupported completion claim.
-- `refund` requires an ALLOW receipt.
+- `release` requires BOTH an ENTITY54 ALLOW receipt (a typed object whose
+  `decision` is exactly `"ALLOW"`) AND a completion-evidence record naming
+  a supported completion kind (`delivery-confirmed`, `service-rendered`,
+  `milestone-reached`, `inspection-passed`). A DENY receipt, an unsupported
+  kind, or a malformed input is refused by the gate and writes nothing.
+- `refund` requires an ALLOW receipt (typed object, `decision` exactly
+  `"ALLOW"`).
 - From `DISPUTED`, only release (with evidence) or refund (with
   authorization) may close the escrow. No return to `FUNDED`.
 - Illegal transitions throw `InvariantViolation` and write no state change.
 - Every transition is idempotent on a caller-supplied event id: a replay
   returns the original receipt with no duplicate state change.
-- The ALLOW receipt and the completion-evidence record are opaque
-  caller-supplied data inputs. This engine never calls ENTITY54, PAYRAIL,
-  any chain, wallet, or network.
+- The ALLOW receipt and the completion-evidence record are typed
+  caller-supplied gate inputs (opaque offline fixtures: decision plus
+  receipt id; kind plus reference). This engine never calls ENTITY54,
+  PAYRAIL, any chain, wallet, or network.
+- The transition rules are deep-frozen at module load, and the public
+  export surface exposes only predicate functions and types, never the
+  live transition table.
 - All amounts are integer minor units (`bigint` in code, decimal strings in
   receipts and SQLite). No floats in money.
 - Every transition writes a hash-chained SHA-256 receipt over canonical
@@ -45,8 +53,11 @@ every transition.
 
 ## What this is NOT
 
-- Not the PAYRAIL54 v2 SQL. That source was not found anywhere reachable,
-  and its existence is unverified.
+- Not the PAYRAIL54 v2 SQL. The PAYRAIL54 v2 SQL was reported recovered
+  separately by DOT-54 (Library); that copy is outside this package and
+  is not verified here. I-3 remains new simulation code, not a recovery.
+  D-3 stays BLOCKED pending verification of the recovered copy against
+  the spec.
 - Not a recovery of anything.
 - Not a P0/P1 remediation. It does not implement the Nov 7 review findings.
 - Not a CIP-54 verifier, not an issuer adapter, not an FA54/issuer worker.
@@ -62,7 +73,7 @@ every transition.
 | `src/escrow-receipt.ts` | Canonical key-sorted JSON receipt, SHA-256 hash chain, verify function. |
 | `src/escrow-store.ts` | SQLite store (`node:sqlite`, in-memory): escrows table, receipts table, event-id index, pool row. Schema only; no migration of any existing data. |
 | `src/index.ts` | Public export surface. |
-| `test/escrow-engine.test.ts` | Unit tests (Section 5.5, 11 tests). |
+| `test/escrow-engine.test.ts` | Unit tests (Section 5.5, 17 tests, including the live-funds guard test "live funds stay disabled in the simulation"). |
 
 ## Build and test
 

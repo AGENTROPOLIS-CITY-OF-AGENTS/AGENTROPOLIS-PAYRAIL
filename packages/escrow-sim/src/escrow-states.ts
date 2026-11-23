@@ -19,10 +19,29 @@ export type EscrowState =
   | "DISPUTED";
 
 /** Terminal states: a terminal escrow rejects further transitions. */
-export const TERMINAL_STATES: ReadonlySet<EscrowState> = new Set([
+export const TERMINAL_STATES: readonly EscrowState[] = Object.freeze([
   "RELEASED",
   "REFUNDED",
-]);
+] as const);
+// NOTE: the terminal states are carried as a frozen array, not a Set.
+// Object.freeze does not stop Set.prototype.add, so a frozen Set would
+// still be mutable at runtime. A frozen array is genuinely immutable.
+
+/**
+ * Deep-freeze a plain object graph at module load. The `Readonly` type is
+ * compile-time only, so the table, every rule, and every `from` array are
+ * frozen at runtime (Defect 2 fix, Nov 22, 2026): a mutation attempt
+ * throws in strict mode and can never change what the engine enforces.
+ */
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null) {
+    for (const child of Object.values(value)) {
+      deepFreeze(child);
+    }
+    Object.freeze(value);
+  }
+  return value;
+}
 
 /** Transitions of the escrow state machine (Section 5.2). */
 export type EscrowTransition =
@@ -44,13 +63,13 @@ export type EscrowTransition =
  */
 export const ALLOWED_TRANSITIONS: Readonly<
   Record<EscrowTransition, { from: readonly (EscrowState | null)[]; to: EscrowState }>
-> = {
+> = deepFreeze({
   create: { from: [null], to: "CREATED" },
   fund: { from: ["CREATED"], to: "FUNDED" },
   release: { from: ["FUNDED", "DISPUTED"], to: "RELEASED" },
   refund: { from: ["FUNDED", "DISPUTED"], to: "REFUNDED" },
   dispute: { from: ["FUNDED"], to: "DISPUTED" },
-};
+});
 
 /** True if the transition may start from the given state. */
 export function isTransitionAllowed(
@@ -62,5 +81,5 @@ export function isTransitionAllowed(
 
 /** True if the state is terminal (RELEASED or REFUNDED). */
 export function isTerminalState(state: EscrowState): boolean {
-  return TERMINAL_STATES.has(state);
+  return TERMINAL_STATES.includes(state);
 }

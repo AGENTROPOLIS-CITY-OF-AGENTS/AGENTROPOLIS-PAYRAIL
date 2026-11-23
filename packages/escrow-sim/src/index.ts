@@ -7,9 +7,16 @@
 // FA54/issuer workers. D-3 stays BLOCKED.
 //
 // Public export surface of the simulation-only escrow state machine.
+//
+// The live rules are NOT exported here (Defect 2 fix, Nov 22, 2026):
+// ALLOWED_TRANSITIONS and TERMINAL_STATES stay inside escrow-states.ts,
+// where they are deep-frozen at module load. Package consumers get only
+// the predicate functions and the types, so no caller can reach or mutate
+// the rules the engine enforces.
 // ---------------------------------------------------------------------------
 
-export * from "./escrow-states";
+export { isTransitionAllowed, isTerminalState } from "./escrow-states";
+export type { EscrowState, EscrowTransition } from "./escrow-states";
 export * from "./escrow-receipt";
 export * from "./escrow-store";
 export * from "./escrow-engine";

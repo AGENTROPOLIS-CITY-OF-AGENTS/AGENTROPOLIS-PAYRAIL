@@ -8,9 +8,12 @@
 //
 // EscrowEngine: create, fund, release, refund, dispute over an in-memory
 // SQLite store (SQL-RECOVERY-REPORT.md Section 5.2 and 5.3). The ALLOW
-// receipt and the completion-evidence record are opaque caller-supplied data
-// inputs, never live calls: this engine never calls ENTITY54, PAYRAIL, any
-// chain, wallet, or network.
+// receipt and the completion-evidence record are typed caller-supplied gate
+// inputs (decision + receipt id; kind + reference), never live calls: this
+// engine never calls ENTITY54, PAYRAIL, any chain, wallet, or network.
+// The gate enforces the decision and the kind in code (Defect 1 fix,
+// Nov 22, 2026): only decision "ALLOW" authorizes, and only a supported
+// completion kind releases. Presence alone never authorizes.
 //
 // FUND ACCOUNTING (forced by invariant 1): the four buckets partition the
 // opening pool balance at every receipt. fund moves funds out of the pool
@@ -48,6 +51,60 @@ export class InvariantViolation extends Error {
     super(`InvariantViolation: ${message}`);
     this.name = "InvariantViolation";
   }
+}
+
+/** Authorization decisions an ENTITY54 receipt can carry. Only ALLOW authorizes. */
+export type AuthorizationDecision = "ALLOW" | "DENY";
+
+/**
+ * Typed ENTITY54 authorization receipt (opaque offline fixture).
+ * The trust boundary is the `decision` field: only the exact value
+ * "ALLOW" authorizes a transition. A DENY receipt, a blank receipt id,
+ * or a malformed shape is refused by the gate.
+ */
+export interface AuthorizationReceipt {
+  /** The decision carried by the receipt. Only "ALLOW" authorizes. */
+  decision: AuthorizationDecision;
+  /** Opaque receipt identifier. Must be a non-empty string. */
+  receiptId: string;
+}
+
+/**
+ * Completion kinds this simulation recognizes as supporting a release.
+ * Any kind outside this set is unsupported and refused by the gate.
+ * Frozen at module load; the list cannot grow at runtime.
+ */
+export const SUPPORTED_EVIDENCE_KINDS = Object.freeze([
+  "delivery-confirmed",
+  "service-rendered",
+  "milestone-reached",
+  "inspection-passed",
+] as const);
+
+export type CompletionEvidenceKind =
+  (typeof SUPPORTED_EVIDENCE_KINDS)[number];
+
+/** True if the kind is one of the supported completion kinds. */
+export function isSupportedEvidenceKind(
+  kind: unknown,
+): kind is CompletionEvidenceKind {
+  return (
+    typeof kind === "string" &&
+    (SUPPORTED_EVIDENCE_KINDS as readonly string[]).includes(kind)
+  );
+}
+
+/**
+ * Typed completion-evidence record (opaque offline fixture).
+ * The `kind` must name a supported completion kind; the `reference` is
+ * an opaque caller-supplied pointer to the evidence. Anything else is
+ * refused as an unsupported completion claim.
+ */
+export interface CompletionEvidence {
+  /** The completion kind. Must be one of SUPPORTED_EVIDENCE_KINDS. */
+  kind: CompletionEvidenceKind;
+  /** Opaque evidence reference. Must be a non-empty string. */
+  reference: string;
 }
 
 /** A valid escrow creation request (Section 5.2, create gate). */
@@ -89,18 +146,18 @@ export interface EscrowView {
   expiry: string;
 }
 
-/** Opaque caller-supplied gate inputs for release. */
+/** Typed caller-supplied gate inputs for release. */
 export interface ReleaseInput {
-  /** Opaque ENTITY54 ALLOW receipt for the release. */
-  authorizationReceipt: string;
-  /** Opaque completion-evidence record. */
-  completionEvidence: string;
+  /** ENTITY54 authorization receipt; decision must be exactly "ALLOW". */
+  authorizationReceipt: AuthorizationReceipt;
+  /** Completion-evidence record; kind must be a supported kind. */
+  completionEvidence: CompletionEvidence;
 }
 
-/** Opaque caller-supplied gate input for refund. */
+/** Typed caller-supplied gate input for refund. */
 export interface RefundInput {
-  /** Opaque ENTITY54 ALLOW receipt for the refund. */
-  authorizationReceipt: string;
+  /** ENTITY54 authorization receipt; decision must be exactly "ALLOW". */
+  authorizationReceipt: AuthorizationReceipt;
 }
 
 /** The simulation-only escrow state machine. */
@@ -193,8 +250,10 @@ export class EscrowEngine {
 
   /**
    * Release a FUNDED or DISPUTED escrow. Requires BOTH an ENTITY54 ALLOW
-   * receipt AND a completion-evidence record. Never executes on an
-   * unsupported completion claim.
+   * receipt (decision exactly "ALLOW") AND a completion-evidence record
+   * naming a supported completion kind. The gate enforces both in code;
+   * a DENY receipt, an unsupported kind, or a malformed input is refused
+   * and writes nothing. Never executes on an unsupported completion claim.
    */
   release(
     eventId: string,
@@ -206,11 +265,11 @@ export class EscrowEngine {
     if (replayed !== undefined) return replayed;
     const escrow = this.requireEscrow(escrowId);
     this.requireAllowed("release", escrow.state);
-    const authorizationReceipt = this.requireOpaque(
+    const authorizationReceipt = this.requireAuthorizationReceipt(
       input.authorizationReceipt,
       "release: authorizationReceipt",
     );
-    const completionEvidence = this.requireOpaque(
+    const completionEvidence = this.requireCompletionEvidence(
       input.completionEvidence,
       "release: completionEvidence",
     );
@@ -233,14 +292,18 @@ export class EscrowEngine {
     });
   }
 
-  /** Refund a FUNDED or DISPUTED escrow. Requires an ALLOW receipt. */
+  /**
+   * Refund a FUNDED or DISPUTED escrow. Requires an ALLOW receipt
+   * (decision exactly "ALLOW"). A DENY receipt or malformed input is
+   * refused and writes nothing.
+   */
   refund(eventId: string, escrowId: string, input: RefundInput): EscrowReceipt {
     this.requireEventId(eventId);
     const replayed = this.replayIfSeen(eventId);
     if (replayed !== undefined) return replayed;
     const escrow = this.requireEscrow(escrowId);
     this.requireAllowed("refund", escrow.state);
-    const authorizationReceipt = this.requireOpaque(
+    const authorizationReceipt = this.requireAuthorizationReceipt(
       input.authorizationReceipt,
       "refund: authorizationReceipt",
     );
@@ -370,11 +433,75 @@ export class EscrowEngine {
     }
   }
 
-  private requireOpaque(value: unknown, name: string): string {
-    if (typeof value !== "string" || value.trim().length === 0) {
-      throw new InvariantViolation(`${name} is required and must be a non-empty string`);
+  /**
+   * Authorization gate (Defect 1 fix): the receipt must be a well-formed
+   * object whose decision is exactly "ALLOW" with a non-empty receipt id.
+   * A DENY receipt, a blank id, or a malformed shape is refused. Returns
+   * a normalized copy so no unvalidated field ever reaches a receipt.
+   */
+  private requireAuthorizationReceipt(
+    value: unknown,
+    name: string,
+  ): AuthorizationReceipt {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new InvariantViolation(
+        `${name} must be an authorization receipt object`,
+      );
     }
-    return value;
+    const receipt = value as Partial<AuthorizationReceipt>;
+    if (receipt.decision !== "ALLOW" && receipt.decision !== "DENY") {
+      throw new InvariantViolation(
+        `${name} has a malformed decision (expected "ALLOW" or "DENY")`,
+      );
+    }
+    if (receipt.decision === "DENY") {
+      throw new InvariantViolation(
+        `${name} carries a DENY decision; transition refused`,
+      );
+    }
+    if (
+      typeof receipt.receiptId !== "string" ||
+      receipt.receiptId.trim().length === 0
+    ) {
+      throw new InvariantViolation(
+        `${name} receiptId must be a non-empty string`,
+      );
+    }
+    return { decision: "ALLOW", receiptId: receipt.receiptId };
+  }
+
+  /**
+   * Completion gate (Defect 1 fix): the evidence must be a well-formed
+   * object naming a supported completion kind with a non-empty reference.
+   * An unsupported kind, a blank reference, or a malformed shape is
+   * refused. Returns a normalized copy so no unvalidated field ever
+   * reaches a receipt.
+   */
+  private requireCompletionEvidence(
+    value: unknown,
+    name: string,
+  ): CompletionEvidence {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new InvariantViolation(
+        `${name} must be a completion-evidence object`,
+      );
+    }
+    const evidence = value as Partial<CompletionEvidence>;
+    if (!isSupportedEvidenceKind(evidence.kind)) {
+      throw new InvariantViolation(
+        `${name} names an unsupported completion kind ` +
+          `(supported: ${SUPPORTED_EVIDENCE_KINDS.join(", ")})`,
+      );
+    }
+    if (
+      typeof evidence.reference !== "string" ||
+      evidence.reference.trim().length === 0
+    ) {
+      throw new InvariantViolation(
+        `${name} reference must be a non-empty string`,
+      );
+    }
+    return { kind: evidence.kind, reference: evidence.reference };
   }
 
   private validateRequest(request: EscrowRequest): void {

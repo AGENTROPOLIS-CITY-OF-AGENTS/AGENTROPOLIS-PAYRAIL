@@ -7,8 +7,9 @@
 // FA54/issuer workers. D-3 stays BLOCKED.
 //
 // Unit tests for the simulation-only escrow state machine
-// (SQL-RECOVERY-REPORT.md Section 5.5, 11 tests). Uses node:test, like the
-// repo's existing tests.
+// (SQL-RECOVERY-REPORT.md Section 5.5, 17 tests, including the live-funds
+// guard test "live funds stay disabled in the simulation"). Uses node:test,
+// like the repo's existing tests.
 // ---------------------------------------------------------------------------
 
 import { test } from "node:test";
@@ -19,13 +20,26 @@ import {
   EscrowEngine,
   InvariantViolation,
   LIVE_FUNDS_ENABLED,
+  SUPPORTED_EVIDENCE_KINDS,
+  isSupportedEvidenceKind,
+  type AuthorizationReceipt,
+  type CompletionEvidence,
+  type CompletionEvidenceKind,
   type EscrowRequest,
+  type ReleaseInput,
 } from "../src/escrow-engine.js";
+import {
+  ALLOWED_TRANSITIONS,
+  TERMINAL_STATES,
+  isTerminalState,
+  isTransitionAllowed,
+} from "../src/escrow-states.js";
 import {
   GENESIS_PREV_HASH,
   verifyReceiptChain,
   type EscrowReceipt,
 } from "../src/escrow-receipt.js";
+import * as escrowSim from "../src/index.js";
 
 const CLOCK = "2026-11-22T00:00:00.000Z";
 const OPENING = 1_000_000n;
@@ -42,6 +56,32 @@ function makeRequest(amount: bigint = AMOUNT): EscrowRequest {
     buyer: "buyer-1",
     seller: "seller-1",
     expiry: "2027-01-01T00:00:00.000Z",
+  };
+}
+
+/** Typed ALLOW receipt fixture for release/refund. */
+function allowReceipt(receiptId: string = "allow-receipt-1"): AuthorizationReceipt {
+  return { decision: "ALLOW", receiptId };
+}
+
+/** Typed DENY receipt fixture: must always be refused. */
+function denyReceipt(receiptId: string = "deny-receipt-1"): AuthorizationReceipt {
+  return { decision: "DENY", receiptId };
+}
+
+/** Typed completion-evidence fixture for release. */
+function completionEvidence(
+  kind: CompletionEvidenceKind = "delivery-confirmed",
+  reference: string = "delivery-proof-1",
+): CompletionEvidence {
+  return { kind, reference };
+}
+
+/** A complete, valid release input. */
+function releaseInput(): ReleaseInput {
+  return {
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   };
 }
 
@@ -93,10 +133,7 @@ test("1. happy path walks CREATED to FUNDED to RELEASED in order", () => {
   assert.equal(engine.balances().pool, OPENING - AMOUNT);
   assert.equal(engine.balances().escrowed, AMOUNT);
 
-  const released = engine.release("evt-release-1", escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
-  });
+  const released = engine.release("evt-release-1", escrowId, releaseInput());
   assert.equal(released.transition, "release");
   assert.equal(released.fromState, "FUNDED");
   assert.equal(released.toState, "RELEASED");
@@ -110,17 +147,37 @@ test("1. happy path walks CREATED to FUNDED to RELEASED in order", () => {
   engine.close();
 });
 
-test("2. release without an authorization receipt throws and changes nothing", () => {
+test("2. release without a usable authorization receipt throws and changes nothing", () => {
   const engine = makeEngine();
   const created = engine.create("evt-create-1", makeRequest());
   engine.fund("evt-fund-1", created.escrowId);
   const before = engine.balances();
   const receiptCount = engine.receipts().length;
+
+  // Missing receipt object.
   assert.throws(
     () =>
       engine.release("evt-release-1", created.escrowId, {
-        authorizationReceipt: "",
-        completionEvidence: "delivery-proof-1",
+        authorizationReceipt: undefined as unknown as AuthorizationReceipt,
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  // Blank receipt id.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt("   "),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  // The old untyped string form is malformed now, not an ALLOW receipt.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: "allow-receipt-1" as unknown as AuthorizationReceipt,
+        completionEvidence: completionEvidence(),
       }),
     InvariantViolation,
   );
@@ -131,17 +188,40 @@ test("2. release without an authorization receipt throws and changes nothing", (
   engine.close();
 });
 
-test("3. release without completion evidence throws and changes nothing", () => {
+test("3. release without usable completion evidence throws and changes nothing", () => {
   const engine = makeEngine();
   const created = engine.create("evt-create-1", makeRequest());
   engine.fund("evt-fund-1", created.escrowId);
   const before = engine.balances();
   const receiptCount = engine.receipts().length;
+
+  // Missing evidence object.
   assert.throws(
     () =>
       engine.release("evt-release-1", created.escrowId, {
-        authorizationReceipt: "allow-receipt-1",
-        completionEvidence: "",
+        authorizationReceipt: allowReceipt(),
+        completionEvidence: undefined as unknown as CompletionEvidence,
+      }),
+    InvariantViolation,
+  );
+  // Blank evidence reference.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt(),
+        completionEvidence: completionEvidence("delivery-confirmed", "  "),
+      }),
+    InvariantViolation,
+  );
+  // Evidence with no kind at all.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt(),
+        completionEvidence: {
+          kind: undefined as unknown as CompletionEvidenceKind,
+          reference: "delivery-proof-1",
+        },
       }),
     InvariantViolation,
   );
@@ -157,7 +237,7 @@ test("4. refund returns funds to the buyer and marks the escrow REFUNDED", () =>
   const created = engine.create("evt-create-1", makeRequest());
   engine.fund("evt-fund-1", created.escrowId);
   const refunded = engine.refund("evt-refund-1", created.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
+    authorizationReceipt: allowReceipt(),
   });
   assert.equal(refunded.transition, "refund");
   assert.equal(refunded.fromState, "FUNDED");
@@ -176,14 +256,14 @@ test("5. double release throws; double refund throws", () => {
   const first = engine.create("evt-create-1", makeRequest());
   engine.fund("evt-fund-1", first.escrowId);
   engine.release("evt-release-1", first.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   });
   assert.throws(
     () =>
       engine.release("evt-release-2", first.escrowId, {
-        authorizationReceipt: "allow-receipt-2",
-        completionEvidence: "delivery-proof-2",
+        authorizationReceipt: allowReceipt("allow-receipt-2"),
+        completionEvidence: completionEvidence("delivery-confirmed", "delivery-proof-2"),
       }),
     InvariantViolation,
   );
@@ -191,12 +271,12 @@ test("5. double release throws; double refund throws", () => {
   const second = engine.create("evt-create-2", makeRequest());
   engine.fund("evt-fund-2", second.escrowId);
   engine.refund("evt-refund-1", second.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
+    authorizationReceipt: allowReceipt(),
   });
   assert.throws(
     () =>
       engine.refund("evt-refund-2", second.escrowId, {
-        authorizationReceipt: "allow-receipt-2",
+        authorizationReceipt: allowReceipt("allow-receipt-2"),
       }),
     InvariantViolation,
   );
@@ -213,8 +293,8 @@ test("6. illegal transitions throw InvariantViolation and write nothing", () => 
   assert.throws(
     () =>
       engine.release("evt-release-1", escrowId, {
-        authorizationReceipt: "allow-receipt-1",
-        completionEvidence: "delivery-proof-1",
+        authorizationReceipt: allowReceipt(),
+        completionEvidence: completionEvidence(),
       }),
     InvariantViolation,
   );
@@ -223,7 +303,7 @@ test("6. illegal transitions throw InvariantViolation and write nothing", () => 
   assert.throws(
     () =>
       engine.refund("evt-refund-1", escrowId, {
-        authorizationReceipt: "allow-receipt-1",
+        authorizationReceipt: allowReceipt(),
       }),
     InvariantViolation,
   );
@@ -236,15 +316,15 @@ test("6. illegal transitions throw InvariantViolation and write nothing", () => 
 
   // No transition out of a terminal state.
   engine.release("evt-release-1", escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   });
   assert.throws(() => engine.fund("evt-fund-3", escrowId), InvariantViolation);
   assert.throws(() => engine.dispute("evt-dispute-2", escrowId), InvariantViolation);
   assert.throws(
     () =>
       engine.refund("evt-refund-2", escrowId, {
-        authorizationReceipt: "allow-receipt-1",
+        authorizationReceipt: allowReceipt(),
       }),
     InvariantViolation,
   );
@@ -285,8 +365,8 @@ test("8. dispute path: FUNDED to DISPUTED, then release or refund closes it", ()
   // No return to FUNDED from DISPUTED.
   assert.throws(() => engine.fund("evt-fund-2", first.escrowId), InvariantViolation);
   const released = engine.release("evt-release-1", first.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   });
   assert.equal(released.fromState, "DISPUTED");
   assert.equal(released.toState, "RELEASED");
@@ -297,7 +377,7 @@ test("8. dispute path: FUNDED to DISPUTED, then release or refund closes it", ()
   engine.fund("evt-fund-2", second.escrowId);
   engine.dispute("evt-dispute-2", second.escrowId);
   const refunded = engine.refund("evt-refund-1", second.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
+    authorizationReceipt: allowReceipt(),
   });
   assert.equal(refunded.fromState, "DISPUTED");
   assert.equal(refunded.toState, "REFUNDED");
@@ -315,8 +395,8 @@ test("9. conservation invariant holds after every receipt", () => {
   engine.fund("evt-fund-1", first.escrowId);
   assertConserved(engine);
   engine.release("evt-release-1", first.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   });
   assertConserved(engine);
   const second = engine.create("evt-create-2", makeRequest(25_000n));
@@ -326,7 +406,7 @@ test("9. conservation invariant holds after every receipt", () => {
   engine.dispute("evt-dispute-1", second.escrowId);
   assertConserved(engine);
   engine.refund("evt-refund-1", second.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
+    authorizationReceipt: allowReceipt(),
   });
   assertConserved(engine);
   const b = engine.balances();
@@ -342,8 +422,8 @@ test("10. receipt chain verifies under independent hash recomputation", () => {
   const first = engine.create("evt-create-1", makeRequest());
   engine.fund("evt-fund-1", first.escrowId);
   engine.release("evt-release-1", first.escrowId, {
-    authorizationReceipt: "allow-receipt-1",
-    completionEvidence: "delivery-proof-1",
+    authorizationReceipt: allowReceipt(),
+    completionEvidence: completionEvidence(),
   });
   const receipts = engine.receipts();
   assert.equal(engine.verifyChain(), true);
@@ -392,14 +472,14 @@ test("11. determinism: the same seeded run twice is byte-identical", () => {
     const first = engine.create("evt-create-1", makeRequest());
     engine.fund("evt-fund-1", first.escrowId);
     engine.release("evt-release-1", first.escrowId, {
-      authorizationReceipt: "allow-receipt-1",
-      completionEvidence: "delivery-proof-1",
+      authorizationReceipt: allowReceipt(),
+      completionEvidence: completionEvidence(),
     });
     const second = engine.create("evt-create-2", makeRequest(25_000n));
     engine.fund("evt-fund-2", second.escrowId);
     engine.dispute("evt-dispute-1", second.escrowId);
     engine.refund("evt-refund-1", second.escrowId, {
-      authorizationReceipt: "allow-receipt-1",
+      authorizationReceipt: allowReceipt(),
     });
     const output = JSON.stringify(engine.receipts());
     engine.close();
@@ -408,4 +488,149 @@ test("11. determinism: the same seeded run twice is byte-identical", () => {
   const firstRun = runScripted();
   const secondRun = runScripted();
   assert.equal(secondRun, firstRun);
+});
+
+test("12. release with a DENY receipt throws and changes nothing", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: denyReceipt(),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("13. release with an unsupported completion kind throws and changes nothing", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt(),
+        completionEvidence: {
+          kind: "verbal-promise" as unknown as CompletionEvidenceKind,
+          reference: "someone-said-so",
+        },
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("14. refund with a DENY receipt throws and changes nothing", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+  assert.throws(
+    () =>
+      engine.refund("evt-refund-1", created.escrowId, {
+        authorizationReceipt: denyReceipt(),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("15. transition rules are frozen at runtime and cannot be mutated", () => {
+  assert.equal(Object.isFrozen(ALLOWED_TRANSITIONS), true);
+  for (const transition of [
+    "create",
+    "fund",
+    "release",
+    "refund",
+    "dispute",
+  ] as const) {
+    assert.equal(Object.isFrozen(ALLOWED_TRANSITIONS[transition]), true);
+    assert.equal(Object.isFrozen(ALLOWED_TRANSITIONS[transition].from), true);
+  }
+  assert.equal(Object.isFrozen(TERMINAL_STATES), true);
+  assert.equal(Object.isFrozen(SUPPORTED_EVIDENCE_KINDS), true);
+  assert.deepEqual([...SUPPORTED_EVIDENCE_KINDS], [
+    "delivery-confirmed",
+    "service-rendered",
+    "milestone-reached",
+    "inspection-passed",
+  ]);
+  assert.equal(isSupportedEvidenceKind("delivery-confirmed"), true);
+  assert.equal(isSupportedEvidenceKind("verbal-promise"), false);
+  assert.equal(isSupportedEvidenceKind(undefined), false);
+
+  // Mutation attempts: they throw in strict mode or fail silently. Either
+  // way the table must be byte-for-byte unchanged afterwards.
+  const before = JSON.stringify(ALLOWED_TRANSITIONS);
+  try {
+    (ALLOWED_TRANSITIONS as unknown as Record<string, unknown>).release = {
+      from: ["CREATED"],
+      to: "RELEASED",
+    };
+  } catch {
+    // Strict-mode refusal.
+  }
+  try {
+    (ALLOWED_TRANSITIONS.release.from as unknown[]).push("CREATED");
+  } catch {
+    // Strict-mode refusal.
+  }
+  try {
+    (TERMINAL_STATES as unknown[]).push("FUNDED");
+  } catch {
+    // Strict-mode refusal.
+  }
+  try {
+    (SUPPORTED_EVIDENCE_KINDS as unknown as unknown[]).push("verbal-promise");
+  } catch {
+    // Strict-mode refusal.
+  }
+  assert.equal(JSON.stringify(ALLOWED_TRANSITIONS), before);
+  assert.equal(isTransitionAllowed("release", "CREATED"), false);
+  assert.equal(isTransitionAllowed("release", "FUNDED"), true);
+  assert.equal(isTransitionAllowed("release", "DISPUTED"), true);
+  assert.equal(isTerminalState("RELEASED"), true);
+  assert.equal(isTerminalState("REFUNDED"), true);
+  assert.equal(isTerminalState("FUNDED"), false);
+
+  // The engine still enforces the original rules after the attempts.
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const released = engine.release("evt-release-1", created.escrowId, releaseInput());
+  assert.equal(released.toState, "RELEASED");
+  engine.close();
+});
+
+test("16. the public package surface does not expose the live transition table", () => {
+  const exposed = escrowSim as unknown as Record<string, unknown>;
+  assert.equal(exposed.ALLOWED_TRANSITIONS, undefined);
+  assert.equal(exposed.TERMINAL_STATES, undefined);
+  assert.equal(typeof escrowSim.isTransitionAllowed, "function");
+  assert.equal(typeof escrowSim.isTerminalState, "function");
+  assert.equal(typeof escrowSim.EscrowEngine, "function");
+  assert.equal(escrowSim.isTransitionAllowed("release", "FUNDED"), true);
+  assert.equal(escrowSim.isTransitionAllowed("release", "CREATED"), false);
+  assert.equal(escrowSim.isTerminalState("REFUNDED"), true);
+  assert.equal(escrowSim.isTerminalState("FUNDED"), false);
 });

@@ -16,6 +16,10 @@
 import { createHash } from "node:crypto";
 
 import type { EscrowState, EscrowTransition } from "./escrow-states";
+import type {
+  AuthorizationReceipt,
+  CompletionEvidence,
+} from "./escrow-engine";
 
 /** Previous-hash value of the first receipt in a chain. */
 export const GENESIS_PREV_HASH = "GENESIS" as const;
@@ -49,10 +53,10 @@ export interface EscrowReceiptBody {
   buyer: string;
   seller: string;
   expiry: string;
-  /** Opaque caller-supplied ENTITY54 ALLOW receipt, or null when not required. */
-  authorizationReceipt: string | null;
-  /** Opaque caller-supplied completion-evidence record, or null when not required. */
-  completionEvidence: string | null;
+  /** Typed ENTITY54 ALLOW receipt carried by the gate, or null when not required. */
+  authorizationReceipt: AuthorizationReceipt | null;
+  /** Typed completion-evidence record carried by the gate, or null when not required. */
+  completionEvidence: CompletionEvidence | null;
   balances: EscrowBalances;
   /** Fixed clock value injected at engine construction, never wall-clock time. */
   clock: string;
