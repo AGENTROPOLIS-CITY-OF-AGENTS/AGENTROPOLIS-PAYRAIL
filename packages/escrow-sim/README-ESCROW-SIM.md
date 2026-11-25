@@ -12,12 +12,15 @@ escrow leg only: create, fund, release, refund, dispute.
 - States: `CREATED`, `FUNDED`, `RELEASED`, `REFUNDED`, `DISPUTED`.
   Terminal: `RELEASED`, `REFUNDED`.
 - `release` requires BOTH an ENTITY54 ALLOW receipt (a typed object whose
-  `decision` is exactly `"ALLOW"`) AND a completion-evidence record naming
+  `decision` is exactly `"ALLOW"` and whose `expiry`, an ISO date, is
+  strictly after the engine clock) AND a completion-evidence record naming
   a supported completion kind (`delivery-confirmed`, `service-rendered`,
-  `milestone-reached`, `inspection-passed`). A DENY receipt, an unsupported
-  kind, or a malformed input is refused by the gate and writes nothing.
+  `milestone-reached`, `inspection-passed`). A DENY receipt, an expired
+  receipt, an unsupported kind, or a malformed input is refused by the
+  gate and writes nothing.
 - `refund` requires an ALLOW receipt (typed object, `decision` exactly
-  `"ALLOW"`).
+  `"ALLOW"`, `expiry` strictly after the engine clock). An expired
+  receipt is refused the same way as a DENY receipt.
 - From `DISPUTED`, only release (with evidence) or refund (with
   authorization) may close the escrow. No return to `FUNDED`.
 - Illegal transitions throw `InvariantViolation` and write no state change.
@@ -25,7 +28,7 @@ escrow leg only: create, fund, release, refund, dispute.
   returns the original receipt with no duplicate state change.
 - The ALLOW receipt and the completion-evidence record are typed
   caller-supplied gate inputs (opaque offline fixtures: decision plus
-  receipt id; kind plus reference). This engine never calls ENTITY54,
+  receipt id plus expiry; kind plus reference). This engine never calls ENTITY54,
   PAYRAIL, any chain, wallet, or network.
 - The transition rules are deep-frozen at module load, and the public
   export surface exposes only predicate functions and types, never the
@@ -73,7 +76,7 @@ every transition.
 | `src/escrow-receipt.ts` | Canonical key-sorted JSON receipt, SHA-256 hash chain, verify function. |
 | `src/escrow-store.ts` | SQLite store (`node:sqlite`, in-memory): escrows table, receipts table, event-id index, pool row. Schema only; no migration of any existing data. |
 | `src/index.ts` | Public export surface. |
-| `test/escrow-engine.test.ts` | Unit tests (Section 5.5, 17 tests, including the live-funds guard test "live funds stay disabled in the simulation"). |
+| `test/escrow-engine.test.ts` | Unit tests (Section 5.5, 21 tests, including the live-funds guard test "live funds stay disabled in the simulation"). |
 
 ## Build and test
 

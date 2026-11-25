@@ -7,7 +7,7 @@
 // FA54/issuer workers. D-3 stays BLOCKED.
 //
 // Unit tests for the simulation-only escrow state machine
-// (SQL-RECOVERY-REPORT.md Section 5.5, 17 tests, including the live-funds
+// (SQL-RECOVERY-REPORT.md Section 5.5, 21 tests, including the live-funds
 // guard test "live funds stay disabled in the simulation"). Uses node:test,
 // like the repo's existing tests.
 // ---------------------------------------------------------------------------
@@ -44,6 +44,8 @@ import * as escrowSim from "../src/index.js";
 const CLOCK = "2026-11-22T00:00:00.000Z";
 const OPENING = 1_000_000n;
 const AMOUNT = 50_000n;
+/** Valid authorization-receipt expiry: strictly after the engine clock. */
+const RECEIPT_EXPIRY = "2027-01-01T00:00:00.000Z";
 
 function makeEngine(): EscrowEngine {
   return new EscrowEngine({ openingPoolBalance: OPENING, clock: CLOCK });
@@ -60,13 +62,19 @@ function makeRequest(amount: bigint = AMOUNT): EscrowRequest {
 }
 
 /** Typed ALLOW receipt fixture for release/refund. */
-function allowReceipt(receiptId: string = "allow-receipt-1"): AuthorizationReceipt {
-  return { decision: "ALLOW", receiptId };
+function allowReceipt(
+  receiptId: string = "allow-receipt-1",
+  expiry: string = RECEIPT_EXPIRY,
+): AuthorizationReceipt {
+  return { decision: "ALLOW", receiptId, expiry };
 }
 
 /** Typed DENY receipt fixture: must always be refused. */
-function denyReceipt(receiptId: string = "deny-receipt-1"): AuthorizationReceipt {
-  return { decision: "DENY", receiptId };
+function denyReceipt(
+  receiptId: string = "deny-receipt-1",
+  expiry: string = RECEIPT_EXPIRY,
+): AuthorizationReceipt {
+  return { decision: "DENY", receiptId, expiry };
 }
 
 /** Typed completion-evidence fixture for release. */
@@ -633,4 +641,133 @@ test("16. the public package surface does not expose the live transition table",
   assert.equal(escrowSim.isTransitionAllowed("release", "CREATED"), false);
   assert.equal(escrowSim.isTerminalState("REFUNDED"), true);
   assert.equal(escrowSim.isTerminalState("FUNDED"), false);
+});
+
+test("17. release with an expired ALLOW receipt throws and changes nothing", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+
+  // Expired before the fixed clock: the DOT-54 I-3 defect. An ALLOW
+  // receipt that expired before the clock must never release.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt(
+          "allow-receipt-expired",
+          "2026-11-21T00:00:00.000Z",
+        ),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  // Missing expiry.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: {
+          ...allowReceipt(),
+          expiry: undefined as unknown as string,
+        },
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  // Blank expiry.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt("allow-receipt-blank", "   "),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  // Non-ISO expiry.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt("allow-receipt-bad", "not-a-date"),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("18. release with an ALLOW receipt expiring exactly at the fixed clock is refused", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+
+  // Boundary: expiry equal to the clock is expired, not valid. The gate
+  // requires expiry strictly after the clock.
+  assert.throws(
+    () =>
+      engine.release("evt-release-1", created.escrowId, {
+        authorizationReceipt: allowReceipt("allow-receipt-boundary", CLOCK),
+        completionEvidence: completionEvidence(),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("19. refund with an expired ALLOW receipt throws and changes nothing", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+
+  // The refund gate takes the same authorization receipt, so the same
+  // expiry rule applies: expired before the clock is refused.
+  assert.throws(
+    () =>
+      engine.refund("evt-refund-1", created.escrowId, {
+        authorizationReceipt: allowReceipt(
+          "allow-receipt-expired",
+          "2026-11-21T00:00:00.000Z",
+        ),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
+});
+
+test("20. refund with an ALLOW receipt expiring exactly at the fixed clock is refused", () => {
+  const engine = makeEngine();
+  const created = engine.create("evt-create-1", makeRequest());
+  engine.fund("evt-fund-1", created.escrowId);
+  const before = engine.balances();
+  const receiptCount = engine.receipts().length;
+
+  // Boundary, same as release: expiry equal to the clock is expired.
+  assert.throws(
+    () =>
+      engine.refund("evt-refund-1", created.escrowId, {
+        authorizationReceipt: allowReceipt("allow-receipt-boundary", CLOCK),
+      }),
+    InvariantViolation,
+  );
+  assert.equal(engine.getEscrow(created.escrowId)?.state, "FUNDED");
+  assert.deepEqual(engine.balances(), before);
+  assert.equal(engine.receipts().length, receiptCount);
+  assertConserved(engine);
+  engine.close();
 });

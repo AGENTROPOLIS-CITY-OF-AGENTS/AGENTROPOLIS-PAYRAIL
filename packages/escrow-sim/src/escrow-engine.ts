@@ -9,10 +9,12 @@
 // EscrowEngine: create, fund, release, refund, dispute over an in-memory
 // SQLite store (SQL-RECOVERY-REPORT.md Section 5.2 and 5.3). The ALLOW
 // receipt and the completion-evidence record are typed caller-supplied gate
-// inputs (decision + receipt id; kind + reference), never live calls: this
-// engine never calls ENTITY54, PAYRAIL, any chain, wallet, or network.
-// The gate enforces the decision and the kind in code (Defect 1 fix,
-// Nov 22, 2026): only decision "ALLOW" authorizes, and only a supported
+// inputs (decision + receipt id + expiry; kind + reference), never live
+// calls: this engine never calls ENTITY54, PAYRAIL, any chain, wallet, or
+// network. The gate enforces the decision, the receipt expiry, and the
+// kind in code (Defect 1 fix, Nov 22, 2026; expiry fix, Nov 25, 2026):
+// only decision "ALLOW" authorizes, only a receipt whose expiry is
+// strictly after the engine clock authorizes, and only a supported
 // completion kind releases. Presence alone never authorizes.
 //
 // FUND ACCOUNTING (forced by invariant 1): the four buckets partition the
@@ -60,13 +62,20 @@ export type AuthorizationDecision = "ALLOW" | "DENY";
  * Typed ENTITY54 authorization receipt (opaque offline fixture).
  * The trust boundary is the `decision` field: only the exact value
  * "ALLOW" authorizes a transition. A DENY receipt, a blank receipt id,
- * or a malformed shape is refused by the gate.
+ * a missing or malformed expiry, or an expiry at or before the engine
+ * clock is refused by the gate (expiry fix, Nov 25, 2026).
  */
 export interface AuthorizationReceipt {
   /** The decision carried by the receipt. Only "ALLOW" authorizes. */
   decision: AuthorizationDecision;
   /** Opaque receipt identifier. Must be a non-empty string. */
   receiptId: string;
+  /**
+   * Receipt expiry, ISO date string. Must be strictly after the engine
+   * clock: a receipt that expired at or before the clock never
+   * authorizes a release or refund, even with decision "ALLOW".
+   */
+  expiry: string;
 }
 
 /**
@@ -250,10 +259,12 @@ export class EscrowEngine {
 
   /**
    * Release a FUNDED or DISPUTED escrow. Requires BOTH an ENTITY54 ALLOW
-   * receipt (decision exactly "ALLOW") AND a completion-evidence record
-   * naming a supported completion kind. The gate enforces both in code;
-   * a DENY receipt, an unsupported kind, or a malformed input is refused
-   * and writes nothing. Never executes on an unsupported completion claim.
+   * receipt (decision exactly "ALLOW", expiry strictly after the engine
+   * clock) AND a completion-evidence record naming a supported
+   * completion kind. The gate enforces both in code; a DENY receipt, an
+   * expired receipt, an unsupported kind, or a malformed input is
+   * refused and writes nothing. Never executes on an unsupported
+   * completion claim or an expired authorization.
    */
   release(
     eventId: string,
@@ -294,8 +305,9 @@ export class EscrowEngine {
 
   /**
    * Refund a FUNDED or DISPUTED escrow. Requires an ALLOW receipt
-   * (decision exactly "ALLOW"). A DENY receipt or malformed input is
-   * refused and writes nothing.
+   * (decision exactly "ALLOW", expiry strictly after the engine clock).
+   * A DENY receipt, an expired receipt, or a malformed input is refused
+   * and writes nothing.
    */
   refund(eventId: string, escrowId: string, input: RefundInput): EscrowReceipt {
     this.requireEventId(eventId);
@@ -434,10 +446,13 @@ export class EscrowEngine {
   }
 
   /**
-   * Authorization gate (Defect 1 fix): the receipt must be a well-formed
-   * object whose decision is exactly "ALLOW" with a non-empty receipt id.
-   * A DENY receipt, a blank id, or a malformed shape is refused. Returns
-   * a normalized copy so no unvalidated field ever reaches a receipt.
+   * Authorization gate (Defect 1 fix; expiry fix, Nov 25, 2026): the
+   * receipt must be a well-formed object whose decision is exactly
+   * "ALLOW" with a non-empty receipt id and an expiry strictly after
+   * the engine clock. A DENY receipt, a blank id, a missing or
+   * malformed expiry, or an expiry at or before the clock is refused.
+   * Returns a normalized copy so no unvalidated field ever reaches a
+   * receipt.
    */
   private requireAuthorizationReceipt(
     value: unknown,
@@ -467,7 +482,30 @@ export class EscrowEngine {
         `${name} receiptId must be a non-empty string`,
       );
     }
-    return { decision: "ALLOW", receiptId: receipt.receiptId };
+    if (
+      typeof receipt.expiry !== "string" ||
+      receipt.expiry.trim().length === 0
+    ) {
+      throw new InvariantViolation(
+        `${name} expiry must be a non-empty ISO date string`,
+      );
+    }
+    if (Number.isNaN(Date.parse(receipt.expiry))) {
+      throw new InvariantViolation(
+        `${name} expiry must be a valid ISO date string`,
+      );
+    }
+    if (Date.parse(receipt.expiry) <= Date.parse(this.clock)) {
+      throw new InvariantViolation(
+        `${name} expired at or before the engine clock ` +
+          `(${receipt.expiry} <= ${this.clock}); transition refused`,
+      );
+    }
+    return {
+      decision: "ALLOW",
+      receiptId: receipt.receiptId,
+      expiry: receipt.expiry,
+    };
   }
 
   /**
