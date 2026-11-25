@@ -1,0 +1,25 @@
+{
+  "name": "@agentropolis/escrow-sim",
+  "version": "0.1.0",
+  "description": "SIMULATION ONLY. NEW implementation built Nov 22, 2026 for mentorship INTEGRATE task I-3. NOT the PAYRAIL54 v2 SQL. NOT a recovery. NOT a P0/P1 remediation. Does not verify CIP-54, the issuer adapter, or the FA54/issuer workers. D-3 stays BLOCKED.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p test/tsconfig.json && node --test test/dist-test/test/*.test.js",
+    "clean": "rm -rf dist dist-test"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0"
+  }
+}
